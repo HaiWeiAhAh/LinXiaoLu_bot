@@ -51,36 +51,65 @@ class Bot:
         self.log.info("===== 消息流打印结束 =====\n")
     async def message_handle(self, msg: dict):
         """处理具体消息根据消息的群聊id分类放进消息流对象"""
-        message_type = msg.get("message_type")
-        #目前只支持群聊消息
-        if message_type == "group":
-            messages:list = msg.get("message")
-            group_id = msg.get("group_id")
-            text_message = ""
-            #目前只支持纯文本消息
-            for message_dict in messages:
-                if message_dict.get("type") == "text":
-                    text_message = text_message + message_dict.get("data").get("text")
-                else:
-                    self.log.debug("消息类型目前不支持")
-            #转换格式变成str的格式
-            now_str_time= datetime.datetime.fromtimestamp(msg.get("time")).strftime("%Y-%m-%d %H:%M:%S")
-            nickname = msg.get("nickname")
-            str_msg = f"{now_str_time} [{nickname}]:{text_message}"
+        try:
+            message_type = msg.get("message_type")
+            # 目前只支持群聊消息
+            if message_type == "group":
+                # 修复1：给msg.get加默认值，避免messages为None导致遍历报错
+                messages: list = msg.get("message", [])
+                group_id = msg.get("group_id")
 
+                # 前置校验：无群ID则跳过（核心字段缺失）
+                if not group_id:
+                    self.log.warning("消息缺少group_id，跳过处理")
+                    return
 
-            #寻找适配的消息流放入
-            for stream in self.msg_stream:
-                if stream.stream_type == MessageStreamObject.GROUP:
-                    if stream.stream_group_id == group_id:
-                        stream.stream_msg.append(str_msg)
+                text_message = ""
+                # 目前只支持纯文本消息
+                for message_dict in messages:
+                    if message_dict.get("type") == "text":
+                        # 修复2：逐层加默认值，避免data/text为None
+                        data = message_dict.get("data", {})
+                        text_val = data.get("text", "")
+                        text_message += text_val  # 等价于 text_message = text_message + text_val
                     else:
-                        #找不到适配的聊天流，创建一个新的聊天流
-                        crate_stream = MessageStreamObject(group_id=group_id, stream_type="message_type")
-                        self.msg_stream.append(crate_stream)
-                        crate_stream.stream_msg.append(str_msg)
-        else:
-            self.log.debug("消息类型目前不支持")
+                        self.log.debug(f"暂不支持的消息段类型：{message_dict.get('type')}")
+
+                # 修复3：处理time/nickname空值，加默认值兜底
+                send_time = msg.get("time", datetime.datetime.now().timestamp())  # 无time则用当前时间
+                nickname = msg.get("nickname", "未知用户")  # 无nickname则兜底
+                now_str_time = datetime.datetime.fromtimestamp(send_time).strftime("%Y-%m-%d %H:%M:%S")
+                str_msg = f"{now_str_time} [{nickname}]: {text_message}"
+
+                # 修复4：重构消息流查找逻辑（核心！）
+                # 步骤1：先遍历所有流，找匹配的群ID
+                target_stream = None
+                for stream in self.msg_stream:
+                    if stream.stream_type == MessageStreamObject.GROUP and stream.stream_group_id == group_id:
+                        target_stream = stream
+                        break  # 找到后立即退出循环，避免无效遍历
+
+                # 步骤2：未找到匹配的流，才创建新流
+                if not target_stream:
+                    # 修复5：stream_type传正确的常量，拼写修正crate→create
+                    create_stream = MessageStreamObject(
+                        group_id=group_id,
+                        stream_type=MessageStreamObject.GROUP  # 关键：用常量而非字符串
+                    )
+                    self.msg_stream.append(create_stream)
+                    target_stream = create_stream  # 指向新流，统一后续追加逻辑
+                    self.log.info(f"为群{group_id}创建新消息流")
+
+                # 步骤3：统一追加消息（无论流是已存在还是新创建）
+                target_stream.stream_msg.append(str_msg)
+                self.log.debug(f"群{group_id}消息已存入流：{str_msg}")
+            else:
+                self.log.debug(f"暂不支持的消息类型：{message_type}，仅支持群聊消息")
+        except Exception as e:
+            # 新增：捕获所有异常，记录详细日志
+            self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
+
+
     async def run(self):
         """启动Bot消息消费循环"""
         self.log.info("Bot开始消费消息...")
