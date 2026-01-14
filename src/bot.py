@@ -39,13 +39,13 @@ class Bot:
         message_type = msg.get("message_type")
         #目前只支持群聊消息
         if message_type == "group":
-            messages = msg.get("message")
+            messages:list = msg.get("message")
             group_id = msg.get("group_id")
             text_message = ""
             #目前只支持纯文本消息
-            for message_list in messages:
-                if message_list.get("type") == "text":
-                    text_message = text_message + message_list.get("text")
+            for message_dict in messages:
+                if message_dict.get("type") == "text":
+                    text_message = text_message + message_dict.get("data").get("text")
                 else:
                     self.log.debug("消息类型目前不支持")
             #转换格式变成str的格式
