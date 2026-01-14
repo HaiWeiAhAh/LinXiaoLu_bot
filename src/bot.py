@@ -32,8 +32,23 @@ class Bot:
         self.log = log
         self.message_queue = message_queue  # 注入全局队列
         self.is_running = True  # 控制消费循环
-        self.msg_stream = [] #存储消息流
+        self.msg_stream:list[MessageStreamObject] = [] #存储消息流
 
+    async def testStreammsg(self):
+        """完善：打印所有消息流的详细信息（按群分类）"""
+        self.log.info("===== 开始打印所有消息流 =====")
+        if not self.msg_stream:
+            self.log.info("暂无消息流数据")
+            return
+
+        for stream in self.msg_stream:
+            # 打印消息流基本信息
+            self.log.info(
+                f"【群ID: {stream.stream_group_id}】消息流ID: {stream.stream_id} | 创建时间: {datetime.datetime.fromtimestamp(stream.create_time).strftime('%Y-%m-%d %H:%M:%S')} | 消息数: {len(stream.stream_msg)}")
+            # 打印该群的每条消息
+            for idx, msg in enumerate(stream.stream_msg, 1):
+                self.log.info(f"  消息{idx}: {msg}")
+        self.log.info("===== 消息流打印结束 =====\n")
     async def message_handle(self, msg: dict):
         """处理具体消息根据消息的群聊id分类放进消息流对象"""
         message_type = msg.get("message_type")
@@ -56,20 +71,21 @@ class Bot:
 
             #寻找适配的消息流放入
             for stream in self.msg_stream:
-                if stream.get("stream_type") == MessageStreamObject.GROUP:
-                    if stream.get("stream_group_id") == group_id:
+                if stream.stream_type == MessageStreamObject.GROUP:
+                    if stream.stream_group_id == group_id:
                         stream.stream_msg.append(str_msg)
                     else:
-                        #创建一个新的聊天流
+                        #找不到适配的聊天流，创建一个新的聊天流
                         crate_stream = MessageStreamObject(group_id=group_id, stream_type="message_type")
                         self.msg_stream.append(crate_stream)
                         crate_stream.stream_msg.append(str_msg)
-            self.log.info(f"聊天流：{self.msg_stream}")
         else:
             self.log.debug("消息类型目前不支持")
     async def run(self):
         """启动Bot消息消费循环"""
         self.log.info("Bot开始消费消息...")
+        print_interval = 30  # 30秒打印一次
+        last_print_time = time.time()
         try:
             while self.is_running:
                 # 阻塞等待队列消息，超时避免死等（可调整）
@@ -78,6 +94,10 @@ class Bot:
                     await self.message_handle(msg)
                     # 标记消息处理完成（队列任务追踪）
                     self.message_queue.task_done()
+
+                    if time.time() - last_print_time >= print_interval:
+                        await self.testStreammsg()
+                        last_print_time = time.time()
                 except asyncio.TimeoutError:
                     continue  # 超时继续循环，检测是否需要退出
         except asyncio.CancelledError:
