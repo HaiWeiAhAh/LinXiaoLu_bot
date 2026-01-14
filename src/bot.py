@@ -44,7 +44,7 @@ class Bot:
         for stream in self.msg_stream:
             # 打印消息流基本信息
             self.log.info(
-                f"【群ID: {stream.stream_group_id}】消息流ID: {stream.stream_id} | 创建时间: {datetime.datetime.fromtimestamp(stream.create_time).strftime('%Y-%m-%d %H:%M:%S')} | 消息数: {len(stream.stream_msg)}")
+                f"【群ID: {stream.stream_group_id}】消息流ID: {stream.stream_id} | 创建时间: {datetime.datetime.fromtimestamp(stream.crate_time).strftime('%Y-%m-%d %H:%M:%S')} | 消息数: {len(stream.stream_msg)}")
             # 打印该群的每条消息
             for idx, msg in enumerate(stream.stream_msg, 1):
                 self.log.info(f"  消息{idx}: {msg}")
