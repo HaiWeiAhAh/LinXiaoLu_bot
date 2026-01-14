@@ -49,7 +49,9 @@ class Bot:
                 else:
                     self.log.debug("消息类型目前不支持")
             #转换格式变成str的格式
-            str_msg = f"{datetime.datetime.fromtimestamp(msg.get("time")).strftime("%Y-%m-%d %H:%M:%S")} [{msg.get("sender").get('nickname')}]:{text_message}"
+            now_str_time= datetime.datetime.fromtimestamp(msg.get("time")).strftime("%Y-%m-%d %H:%M:%S")
+            nickname = msg.get("nickname")
+            str_msg = f"{now_str_time} [{nickname}]:{text_message}"
 
 
             #寻找适配的消息流放入
