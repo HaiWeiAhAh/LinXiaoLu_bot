@@ -77,9 +77,10 @@ class Bot:
 
                 # 修复3：处理time/nickname空值，加默认值兜底
                 send_time = msg.get("time", datetime.datetime.now().timestamp())  # 无time则用当前时间
-                nickname = msg.get("nickname", "未知用户")  # 无nickname则兜底
+                nickname = msg.get("sender").get("nickname","unknown")  # 无nickname则兜底
+                role = msg.get("sender").get("role")
                 now_str_time = datetime.datetime.fromtimestamp(send_time).strftime("%Y-%m-%d %H:%M:%S")
-                str_msg = f"{now_str_time} [{nickname}]: {text_message}"
+                str_msg = f"{now_str_time} [{nickname}-{role}]: {text_message}"
 
                 # 修复4：重构消息流查找逻辑（核心！）
                 # 步骤1：先遍历所有流，找匹配的群ID
