@@ -7,16 +7,17 @@ from utils.logger import LoggerManager
 from src.napcat_adapter import Adapter
 
 global_message_queue = asyncio.Queue()
-
+global_send_message_queue = asyncio.Queue()
 
 async def start_adapter(cfg,log):
     """模拟Adapter：无限循环运行，捕获取消信号优雅退出"""
     log = log.get_logger("adapter")
     log.info("Adapter 启动成功，开始监听消息...")
-    adapter = Adapter(cfg=cfg, log=log,global_message_queue=global_message_queue)
+    adapter = Adapter(cfg=cfg, log=log,global_message_queue=global_message_queue,global_send_queue=global_send_message_queue)
     try:
         # 模拟你的Adapter核心逻辑（比如WebSocket监听）
         await adapter.start_server()
+        await adapter.get_send_msg_to_napcat()
     except asyncio.CancelledError:
         # 关键：捕获取消信号，执行资源清理（根据你的业务补充）
         log.info("Adapter：收到退出信号，正在清理资源（关闭WebSocket/队列）...")
@@ -26,7 +27,7 @@ async def start_bot(cfg, log):
     """模拟Bot：无限循环运行，捕获取消信号优雅退出"""
     log = log.get_logger("bot")
     log.info("Bot 启动成功，开始处理消息...")
-    bot = Bot(log=log, message_queue=global_message_queue)
+    bot = Bot(log=log, message_queue=global_message_queue,send_message_queue =global_send_message_queue )
     try:
         await bot.run()
     except asyncio.CancelledError:

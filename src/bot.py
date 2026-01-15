@@ -28,9 +28,10 @@ class MessageStreamObject:
 
 
 class Bot:
-    def __init__(self, log, message_queue: asyncio.Queue):
+    def __init__(self, log, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log
         self.message_queue = message_queue  # 注入全局队列
+        self.send_message_queue = send_message_queue
         self.is_running = True  # 控制消费循环
         self.msg_stream:list[MessageStreamObject] = [] #存储消息流
 
@@ -110,6 +111,11 @@ class Bot:
             # 新增：捕获所有异常，记录详细日志
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
 
+    async def send_message_test(self):
+        text = "hello world"
+        group_id = 671970301
+        payload = {"text": text, "group_id": group_id}
+        await self.send_message_queue.put(payload)
 
     async def run(self):
         """启动Bot消息消费循环"""
@@ -124,10 +130,13 @@ class Bot:
                     await self.message_handle(msg)
                     # 标记消息处理完成（队列任务追踪）
                     self.message_queue.task_done()
-
+                    #打印聊天流
                     if time.time() - last_print_time >= print_interval:
+                        await  self.send_message_test()
                         await self.testStreammsg()
                         last_print_time = time.time()
+
+
                 except asyncio.TimeoutError:
                     continue  # 超时继续循环，检测是否需要退出
         except asyncio.CancelledError:
