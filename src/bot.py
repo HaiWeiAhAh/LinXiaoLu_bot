@@ -112,6 +112,7 @@ class Bot:
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
 
     async def send_message_test(self):
+        self.log.info("尝试发送消息到adapter")
         text = "hello world"
         group_id = 671970301
         payload = {"text": text, "group_id": group_id}

@@ -15,9 +15,9 @@ class Adapter:
         self.host = cfg.get("adapter", "host")
         self.port = cfg.get("adapter", "port")
 
-
+        self.active_connections = set()
         self.message_queue = global_message_queue#接受napcat消息并向bot转发消息的队列
-        self.send_message_to_napcat = global_send_queue
+        self.send_msg_queue = global_send_queue
         self.server = None
         self.response_queue = []
 
@@ -48,7 +48,8 @@ class Adapter:
     async def send_message_to_napcat(self, action: str, params: dict) -> dict:
         request_uuid = str(uuid.uuid4())
         payload = json.dumps({"action": action, "params": params, "echo": request_uuid})
-        await self.server.send(payload)
+        conn = next(iter(self.active_connections))
+        await conn.send(payload)
         try:
             response = await self.get_response(request_uuid)
         except TimeoutError:
@@ -60,26 +61,39 @@ class Adapter:
         return response
 
     async def get_send_msg_to_napcat(self):
-            while True:
-                try:
-                    send_msg:dict = await asyncio.wait_for(self.send_message_to_napcat.get(), timeout=1.0)
-                    self.send_message_to_napcat.task_done()
-                    _ = await self.send_group_text_msg(send_msg["text"], send_msg["group_id"])
-                except asyncio.TimeoutError:
-                    continue  # 超时继续循环，检测是否需要退出
+        """循环从发送队列取消息，发送到Napcat"""
+        while True:
+            try:
+                # 修复：使用重命名后的队列，且超时时间内检测取消信号
+                send_msg: dict = await asyncio.wait_for(
+                    self.send_queue.get(), timeout=1.0
+                )
+                self.send_queue.task_done()
+                await self.send_group_text_msg(send_msg["text"], send_msg["group_id"])
+            except asyncio.TimeoutError:
+                continue  # 超时继续，检测是否需要退出
+            except asyncio.CancelledError:
+                self.log.info("发送消息循环收到取消信号，退出")
+                break
+            except Exception as e:
+                self.log.error(f"处理发送队列消息错误: {e}")
     async def message_recv(self, server_connection: Server.ServerConnection):
-        async for raw_message in server_connection:
-            self.log.info(
-                f"{raw_message[:100]}..."
-                if (len(raw_message) > 100)
-                else raw_message
-            )
-            decoded_raw_message: dict = json.loads(raw_message)
-            post_type = decoded_raw_message.get("post_type")
-            if post_type in ["message"]:
-                await self.message_queue.put(decoded_raw_message)
-            elif post_type is None:
-                await self.put_response(decoded_raw_message)
+        self.active_connections.add(server_connection)
+        try:
+            async for raw_message in server_connection:
+                self.log.info(
+                    f"{raw_message[:100]}..."
+                    if (len(raw_message) > 100)
+                    else raw_message
+                )
+                decoded_raw_message: dict = json.loads(raw_message)
+                post_type = decoded_raw_message.get("post_type")
+                if post_type in ["message"]:
+                    await self.message_queue.put(decoded_raw_message)
+                elif post_type is None:
+                    await self.put_response(decoded_raw_message)
+        finally:
+            self.active_connections.discard(server_connection)
     async def start_server(self):
         try:
             self.log.info("正在启动adapter...")
