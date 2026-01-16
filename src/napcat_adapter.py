@@ -23,11 +23,29 @@ class Adapter:
 
     async def put_response(self,response:dict):
         self.response_queue.append(response)
-    async def get_response(self,response_id):
-        for response in self.response_queue:
-            if response.get("echo") == response_id:
-                return response
-        return None
+
+    async def get_response(self,request_id: str) -> dict:
+        retry_count = 0
+        retry_count_2=0
+        max_retries = 50  # 10秒超时
+        await asyncio.sleep(0.2)
+
+        while self.response_queue is None:
+            retry_count += 1
+            if retry_count >= max_retries:
+                raise TimeoutError("请求超时，未收到响应")
+            await asyncio.sleep(0.2)
+
+        while self.response_queue is not None:
+            for response in self.response_queue:
+                if response.get("echo") == request_id:
+                    response = self.response_queue.pop(0)
+                    return response
+            retry_count_2 += 1
+            if retry_count_2 >= max_retries:
+                raise TimeoutError(f"请求超时，未找到响应{request_id}")
+            await asyncio.sleep(0.2)
+
 
     async def send_group_text_msg(self,msg:str,group_id:int):
         try:
