@@ -15,6 +15,11 @@ class MessageStreamObject:
 
 
     GROUP = "group"
+    ROLE_OWNER = {"owner":"群主"}
+    ROLE_ADMIN = {"admin":"管理员"}
+    ROLE_MEMBER = {"member":"群臣员"}
+    GROUP_ROLE =[ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER]
+    SENDER_INFO =[]
     STREAM_TYPE = [GROUP]
 
 
@@ -80,8 +85,12 @@ class Bot:
                 send_time = msg.get("time", datetime.datetime.now().timestamp())  # 无time则用当前时间
                 nickname = msg.get("sender").get("nickname","unknown")  # 无nickname则兜底
                 role = msg.get("sender").get("role")
+                #修正消息发送者的身份
+                for roles in MessageStreamObject.GROUP_ROLE:
+                    if role in roles.keys():
+                        role = roles.values()
                 now_str_time = datetime.datetime.fromtimestamp(send_time).strftime("%Y-%m-%d %H:%M:%S")
-                str_msg = f"{now_str_time} [{nickname}-{role}]: {text_message}"
+                str_msg = f"{now_str_time} [{nickname}]-[{role}]: {text_message}"
 
                 # 修复4：重构消息流查找逻辑（核心！）
                 # 步骤1：先遍历所有流，找匹配的群ID
