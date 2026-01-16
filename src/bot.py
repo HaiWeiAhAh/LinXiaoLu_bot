@@ -88,7 +88,7 @@ class Bot:
                 #修正消息发送者的身份
                 for roles in MessageStreamObject.GROUP_ROLE:
                     if role in roles.keys():
-                        role = roles.values()
+                        role = roles[role]
                 now_str_time = datetime.datetime.fromtimestamp(send_time).strftime("%Y-%m-%d %H:%M:%S")
                 str_msg = f"{now_str_time} [{nickname}]-[{role}]: {text_message}"
 
