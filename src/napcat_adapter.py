@@ -66,9 +66,9 @@ class Adapter:
             try:
                 # 修复：使用重命名后的队列，且超时时间内检测取消信号
                 send_msg: dict = await asyncio.wait_for(
-                    self.send_queue.get(), timeout=1.0
+                    self.send_msg_queue.get(), timeout=1.0
                 )
-                self.send_queue.task_done()
+                self.send_msg_queue.task_done()
                 await self.send_group_text_msg(send_msg["text"], send_msg["group_id"])
             except asyncio.TimeoutError:
                 continue  # 超时继续，检测是否需要退出
