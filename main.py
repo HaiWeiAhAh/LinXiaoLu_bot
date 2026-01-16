@@ -14,12 +14,15 @@ async def start_adapter(cfg,log):
     log = log.get_logger("adapter")
     log.info("Adapter 启动成功，开始监听消息...")
     adapter = Adapter(cfg=cfg, log=log,global_message_queue=global_message_queue,global_send_queue=global_send_message_queue)
+    #模拟你的Adapter核心逻辑（比如WebSocket监听）
+    server_task = asyncio.create_task(adapter.start_server())
+    send_msg_task = asyncio.create_task(adapter.get_send_msg_to_napcat())
     try:
-        # 模拟你的Adapter核心逻辑（比如WebSocket监听）
-        await adapter.start_server()
-        await adapter.get_send_msg_to_napcat()
+        await asyncio.gather(server_task,send_msg_task)
     except asyncio.CancelledError:
         # 关键：捕获取消信号，执行资源清理（根据你的业务补充）
+        server_task.cancel()
+        send_msg_task.cancel()
         log.info("Adapter：收到退出信号，正在清理资源（关闭WebSocket/队列）...")
     finally:
         log.info("Adapter：已优雅退出")
