@@ -89,7 +89,15 @@ class ChatBotSession:
         await self.send_queue.put(payload)
 
     async def stop_session(self):
-        pass
+        """停止session任务"""
+        self.is_running = False
+        if self.session_task and not self.session_task.done():
+            self.session_task.cancel()
+            try:
+                await self.session_task
+            except asyncio.CancelledError:
+                pass
+        self.log.info(f"Session {self.bot_id} 已停止（群ID：{self.message_stream.stream_group_id}）")
 class Bot:
     def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log
