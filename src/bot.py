@@ -123,13 +123,26 @@ class Bot:
             for idx, msg in enumerate(stream.stream_msg, 1):
                 self.log.info(f"  消息{idx}: {msg}")
         self.log.info("===== 消息流打印结束 =====\n")
+
+    async def ensure_session_active(self, stream: MessageStreamObject):
+        """确保消息流对应的Session已激活（仅创建一次）"""
+        if stream in self.bot_session:
+            # 检查现有Session是否正常运行
+            session, task = self.bot_session[stream]
+            if task.done() and not session.is_running:
+                self.log.info(f"群{stream.stream_group_id}的Session已终止，重新启动")
+                await self.create_and_start_bot_session(stream)
+            return
+
+        # 新消息流：创建并启动Session
+        await self.create_and_start_bot_session(stream)
+
     async def message_handle(self, msg: dict):
         """处理具体消息根据消息的群聊id分类放进消息流对象"""
         try:
             message_type = msg.get("message_type")
             # 目前只支持群聊消息
             if message_type == "group":
-                # 修复1：给msg.get加默认值，避免messages为None导致遍历报错
                 messages: list = msg.get("message", [])
                 group_id = msg.get("group_id")
 
@@ -138,54 +151,51 @@ class Bot:
                     self.log.warning("消息缺少group_id，跳过处理")
                     return
 
+                # 拼接纯文本消息
                 text_message = ""
-                # 目前只支持纯文本消息
                 for message_dict in messages:
                     if message_dict.get("type") == "text":
-                        # 修复2：逐层加默认值，避免data/text为None
                         data = message_dict.get("data", {})
                         text_val = data.get("text", "")
-                        text_message += text_val  # 等价于 text_message = text_message + text_val
+                        text_message += text_val
                     else:
                         self.log.debug(f"暂不支持的消息段类型：{message_dict.get('type')}")
 
-                # 修复3：处理time/nickname空值，加默认值兜底
-                send_time = msg.get("time", datetime.datetime.now().timestamp())  # 无time则用当前时间
-                nickname = msg.get("sender").get("nickname","unknown")  # 无nickname则兜底
-                role = msg.get("sender").get("role")
-                #修正消息发送者的身份
-                for roles in MessageStreamObject.GROUP_ROLE:
-                    if role in roles.keys():
-                        role = roles[role]
+                # 构造格式化消息
+                send_time = msg.get("time", datetime.datetime.now().timestamp())
+                nickname = msg.get("sender", {}).get("nickname", "unknown")
+                role = msg.get("sender", {}).get("role", "member")
+                # 修正发送者身份
+                for role_map in MessageStreamObject.GROUP_ROLE:
+                    if role in role_map:
+                        role = role_map[role]
+                        break
                 now_str_time = datetime.datetime.fromtimestamp(send_time).strftime("%Y-%m-%d %H:%M:%S")
                 str_msg = f"{now_str_time} [{nickname}]-[{role}]: {text_message}"
 
-                # 修复4：重构消息流查找逻辑（核心！）
-                # 步骤1：先遍历所有流，找匹配的群ID
+                # 查找/创建消息流
                 target_stream = None
                 for stream in self.msg_stream:
                     if stream.stream_type == MessageStreamObject.GROUP and stream.stream_group_id == group_id:
                         target_stream = stream
-                        break  # 找到后立即退出循环，避免无效遍历
-
-                # 步骤2：未找到匹配的流，才创建新流
+                        break
                 if not target_stream:
-                    # 修复5：stream_type传正确的常量，拼写修正crate→create
-                    create_stream = MessageStreamObject(
+                    target_stream = MessageStreamObject(
                         group_id=group_id,
-                        stream_type=MessageStreamObject.GROUP  # 关键：用常量而非字符串
+                        stream_type=MessageStreamObject.GROUP
                     )
-                    self.msg_stream.append(create_stream)
-                    target_stream = create_stream  # 指向新流，统一后续追加逻辑
+                    self.msg_stream.append(target_stream)
                     self.log.info(f"为群{group_id}创建新消息流")
 
-                # 步骤3：统一追加消息（无论流是已存在还是新创建）
-                target_stream.stream_msg.append(str_msg)
+                # 追加消息并标记有新消息
+                await target_stream.add_new_message(str_msg)  # 改用async方法（原代码是直接append，需保持async）
                 self.log.debug(f"群{group_id}消息已存入流：{str_msg}")
+
+                # 为新消息流创建并启动Session（核心：激活Session）
+                await self.ensure_session_active(target_stream)
             else:
                 self.log.debug(f"暂不支持的消息类型：{message_type}，仅支持群聊消息")
         except Exception as e:
-            # 新增：捕获所有异常，记录详细日志
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
 
     async def create_and_start_bot_session(self,message_stream:MessageStreamObject):
