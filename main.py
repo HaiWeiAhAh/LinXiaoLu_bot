@@ -30,7 +30,7 @@ async def start_bot(cfg, log):
     """模拟Bot：无限循环运行，捕获取消信号优雅退出"""
     log = log.get_logger("bot")
     log.info("Bot 启动成功，开始处理消息...")
-    bot = Bot(log=log, message_queue=global_message_queue,send_message_queue =global_send_message_queue )
+    bot = Bot(log=log,cfg = cfg, message_queue=global_message_queue,send_message_queue =global_send_message_queue )
     try:
         await bot.run()
     except asyncio.CancelledError:
