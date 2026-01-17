@@ -4,7 +4,7 @@ from utils.config import ConfigManager
 
 
 
-def UseAPI(current_uesrmsg,global_cfg:ConfigManager,history: list | None = None,):
+async  def UseAPI(current_uesrmsg,global_cfg:ConfigManager,llm_role:str = None,history: list | None = None,):
     """
     :内部方法
     :current_uesrmsg:当前用户发送的消息
@@ -13,9 +13,11 @@ def UseAPI(current_uesrmsg,global_cfg:ConfigManager,history: list | None = None,
     """
     try:
         # 初始化系统的角色
-        message = [
-            {'role': 'system', 'content': global_cfg.get("setup","setting")},
-        ]
+        message = []
+        if llm_role:
+            message = [
+                {'role': 'system', 'content': llm_role},
+            ]
         # 历史消息构建
         for user_msg, ai_msg in history:
             if history:
