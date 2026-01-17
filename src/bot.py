@@ -52,11 +52,16 @@ class ChatBotSession:
         self.bot_id = uuid.uuid4()
         self.send_queue = send_message_queue
         self.message_stream = message_stream
-        self.start_session()
+        self.session_task = None
+        self.is_running = False
     async def start_session(self):
-        while True:
+        self.is_running = True
+        self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
+        while self.is_running:
             if self.message_stream.stream_msg:
                 continue
+            if not self.message_stream.have_new_message:
+                await asyncio.sleep(0.1)
             if self.message_stream.have_new_message:
                 msg = await self.message_stream.get_new_message()
                 template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天记录如下
@@ -64,16 +69,21 @@ class ChatBotSession:
 对此你想说（或者不想说）："""
                 try:
                     response = await UseAPI(current_uesrmsg=template_msg,global_cfg=self.cfg)
-                    await self.send_text_message(response)
+                    await self.send_text_message(
+                        text=response,
+                        group_id=self.message_stream.stream_group_id
+                    )
                     #获取自己消息的
                     now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     alias_name = self.cfg.get("setup","alias_name")
                     str_msg = f"{now_str_time} [{alias_name}]: {response}"#将ai的回复添加进聊天流
                     await self.message_stream.add_new_message(str_msg,self_add=True)
+                    self.log.info(f"Session {self.bot_id} 已处理消息并回复：{response[:50]}...")
                 except Exception as e:
-                    self.log.error(e)
+                    self.log.error(f"Session {self.bot_id} 处理消息失败：{e}", exc_info=True)
+                    self.log.error(f"{e}")
 
-    async def send_text_message(self,text:str,group_id:int=None):
+    async def send_text_message(self,text:str,group_id:int):
         self.log.info("尝试发送消息到adapter")
         payload = {"text": text, "group_id": group_id}
         await self.send_queue.put(payload)
@@ -87,7 +97,7 @@ class Bot:
         self.message_queue = message_queue  # 注入全局队列
         self.send_message_queue = send_message_queue
         self.is_running = True  # 控制消费循环
-        self.bot_session: dict[MessageStreamObject, ChatBotSession] = {} #存储chatbot对象
+        self.bot_session: dict[MessageStreamObject, tuple[ChatBotSession,asyncio.Task]] = {} #存储chatbot对象
         self.msg_stream:list[MessageStreamObject] = [] #存储消息流
 
     async def test_Stream_msg(self):
@@ -170,10 +180,11 @@ class Bot:
             # 新增：捕获所有异常，记录详细日志
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
 
-    async def create_bot_session(self,message_stream:MessageStreamObject):
-        new_bot = ChatBotSession(cfg=self.cfg,log=self.log,message_stream=message_stream,send_message_queue=self.send_message_queue)
-        self.bot_session[message_stream] = new_bot
-        self.log.info(f"ChatbotSession-{new_bot.bot_id}对象已创建")
+    async def create_and_start_bot_session(self,message_stream:MessageStreamObject):
+        session = ChatBotSession(cfg=self.cfg,log=self.log,message_stream=message_stream,send_message_queue=self.send_message_queue)
+        session_task = asyncio.create_task(session.start_session())
+        self.bot_session[message_stream] = (session,session_task)
+        self.log.info(f"ChatbotSession-{session.bot_id}对象已创建并激活")
     async def run(self):
         """启动Bot消息消费循环"""
         self.log.info("Bot开始消费消息...")
@@ -194,9 +205,7 @@ class Bot:
                     #为聊天流创建聊天对象,并激活
                     for stream in self.msg_stream:
                         if not stream in self.bot_session:
-                            await self.create_bot_session(message_stream=stream)
-                    for bot in self.bot_session.values():
-                        await bot.start_session()
+                            await self.create_and_start_bot_session(message_stream=stream)
                     self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
                 except asyncio.TimeoutError:
                     continue  # 超时继续循环，检测是否需要退出
