@@ -58,11 +58,11 @@ class ChatBotSession:
         self.is_running = True
         self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
         while self.is_running:
-            if self.message_stream.stream_msg:
+            if not self.message_stream.stream_msg:
                 continue
             if not self.message_stream.have_new_message:
                 await asyncio.sleep(0.1)
-            if self.message_stream.have_new_message:
+            else:
                 msg = await self.message_stream.get_new_message()
                 template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天记录如下
 {msg}
