@@ -66,7 +66,7 @@ class ChatBotSession:
                 msg = await self.message_stream.get_new_message()
                 template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天聊  天记录如下
 {msg}
-你发送消息说（禁止出现动作描述）："""
+你发送消息说（禁止出现动作描述，心里描述，神态描述）："""
                 try:
                     response = await UseAPI(current_uesrmsg=template_msg,global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
                     await self.send_text_message(
