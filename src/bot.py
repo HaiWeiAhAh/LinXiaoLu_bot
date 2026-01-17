@@ -220,10 +220,6 @@ class Bot:
                     if time.time() - last_print_time >= print_interval:
                         await self.test_Stream_msg()
                         last_print_time = time.time()
-                    #为聊天流创建聊天对象,并激活
-                    for stream in self.msg_stream:
-                        if not stream in self.bot_session:
-                            await self.create_and_start_bot_session(message_stream=stream)
                     self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
                 except asyncio.TimeoutError:
                     continue  # 超时继续循环，检测是否需要退出
