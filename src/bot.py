@@ -79,14 +79,16 @@ class ChatBotSession:
     async def stop_session(self):
         pass
 class Bot:
-    def __init__(self, log, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
+    def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log
+        self.cfg = cfg
         self.message_queue = message_queue  # 注入全局队列
         self.send_message_queue = send_message_queue
         self.is_running = True  # 控制消费循环
+        self.bot_session = None
         self.msg_stream:list[MessageStreamObject] = [] #存储消息流
 
-    async def testStreammsg(self):
+    async def test_Stream_msg(self):
         """完善：打印所有消息流的详细信息（按群分类）"""
         self.log.info("===== 开始打印所有消息流 =====")
         if not self.msg_stream:
@@ -166,13 +168,8 @@ class Bot:
             # 新增：捕获所有异常，记录详细日志
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
 
-    async def send_message_test(self):
-        self.log.info("尝试发送消息到adapter")
-        text = "hello world"
-        group_id = 671970301
-        payload = {"text": text, "group_id": group_id}
-        await self.send_message_queue.put(payload)
-
+    async def create_bot_session(self,message_stream:MessageStreamObject) -> ChatBotSession:
+        return ChatBotSession(cfg=self.cfg,log=self.log,message_stream=message_stream,send_message_queue=self.send_message_queue)
     async def run(self):
         """启动Bot消息消费循环"""
         self.log.info("Bot开始消费消息...")
