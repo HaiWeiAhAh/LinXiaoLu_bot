@@ -64,11 +64,11 @@ class ChatBotSession:
                 await asyncio.sleep(0.1)
             else:
                 msg = await self.message_stream.get_new_message()
-                template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天记录如下
+                template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天聊天记录如下
 {msg}
-对此你想说（或者不想说）："""
+你说（或者不说）："""
                 try:
-                    response = await UseAPI(current_uesrmsg=template_msg,global_cfg=self.cfg)
+                    response = await UseAPI(current_uesrmsg=template_msg,global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
                     await self.send_text_message(
                         text=response,
                         group_id=self.message_stream.stream_group_id
