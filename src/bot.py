@@ -185,8 +185,7 @@ class Bot:
                     self.message_queue.task_done()
                     #打印聊天流
                     if time.time() - last_print_time >= print_interval:
-                        await  self.send_message_test()
-                        await self.testStreammsg()
+                        await self.test_Stream_msg()
                         last_print_time = time.time()
 
 
