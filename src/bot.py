@@ -4,6 +4,9 @@ import datetime
 import time
 import uuid
 
+from pyexpat.errors import messages
+
+from src.LLM_API import UseAPI
 
 class MessageStreamObject:
     """
@@ -30,8 +33,51 @@ class MessageStreamObject:
         self.stream_msg: list = []  # 这里放置受到的群聊消息
         self.stream_type = stream_type
         self.stream_group_id = group_id
+        self.have_new_message = False
 
+    async def add_new_message(self,new_message:str,self_add:bool=False):
+        self.stream_msg.append(new_message)
+        if not self_add:
+            self.have_new_message = True
+    async def get_new_message(self) -> str:
+        messages_ =""
+        for msg in self.stream_msg:
+            messages_ = messages_+"\n"+msg
+        self.have_new_message = False
+        return messages_
+class ChatBotSession:
+    def __init__(self,cfg,log,message_stream:MessageStreamObject,send_message_queue: asyncio.Queue):
+        self.log = log
+        self.cfg = cfg
+        self.send_queue = send_message_queue
+        self.message_stream = message_stream
+    async def start_session(self):
+        while True:
+            if self.message_stream.stream_msg:
+                continue
+            if self.message_stream.have_new_message:
+                msg = await self.message_stream.get_new_message()
+                template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天记录如下
+{msg}
+对此你想说（或者不想说）："""
+                try:
+                    response = await UseAPI(current_uesrmsg=template_msg,global_cfg=self.cfg)
+                    await self.send_text_message(response)
+                    #获取自己消息的
+                    now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    alias_name = self.cfg.get("setup","alias_name")
+                    str_msg = f"{now_str_time} [{alias_name}]: {response}"#将ai的回复添加进聊天流
+                    await self.message_stream.add_new_message(str_msg,self_add=True)
+                except Exception as e:
+                    self.log.error(e)
 
+    async def send_text_message(self,text:str,group_id:int=None):
+        self.log.info("尝试发送消息到adapter")
+        payload = {"text": text, "group_id": group_id}
+        await self.send_queue.put(payload)
+
+    async def stop_session(self):
+        pass
 class Bot:
     def __init__(self, log, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log
