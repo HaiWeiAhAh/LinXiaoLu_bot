@@ -98,11 +98,11 @@ class ChatBotSession:
                         'inner_os': r'【内心OS】\s*[:：]\s*(.+)',
                     }
                     for key,pattern in patterns.items():
-                        match = re.search(pattern,msg)
+                        match = re.search(pattern,response)
                         if match:
                             result[key] = match.group(1).strip()
                         else:
-                            result[key] = result[key].strip()
+                            result[key] = ""
                     await self.build_action_memory_unit(result["inner_os"])
                     await self.send_text_message(
                         text=result["actual_reply"],
