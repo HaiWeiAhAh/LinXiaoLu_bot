@@ -20,7 +20,7 @@ class MessageStreamObject:
     GROUP = "group"
     ROLE_OWNER = {"owner":"群主"}
     ROLE_ADMIN = {"admin":"管理员"}
-    ROLE_MEMBER = {"member":"群臣员"}
+    ROLE_MEMBER = {"member":"群成员"}
     GROUP_ROLE =[ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER]
     SENDER_INFO =[]
     STREAM_TYPE = [GROUP]
@@ -39,10 +39,14 @@ class MessageStreamObject:
         self.stream_msg.append(new_message)
         if not self_add:
             self.have_new_message = True
-    async def get_new_message(self) -> str:
+    async def get_new_message(self,max_msg_count:int = 20) -> str:
         messages_ =""
-        for msg in self.stream_msg:
-            messages_ = messages_+"\n"+msg
+        if not isinstance(max_msg_count, int) or max_msg_count <= 0:
+            max_msg_count = 15
+        if not self.have_new_message:
+            return ""
+        recent_msg = self.stream_msg[-max_msg_count:]
+        messages_ = "\n".join(recent_msg)
         self.have_new_message = False
         return messages_
 class ChatBotSession:
@@ -64,7 +68,7 @@ class ChatBotSession:
                 await asyncio.sleep(0.1)
             else:
                 msg = await self.message_stream.get_new_message()
-                template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天聊  天记录如下
+                template_msg = f"""QQ铃声的振动引起了你的注意，看到了这个群聊的天聊天记录如下
 {msg}
 你发送消息说（禁止出现动作描述，心里描述，神态描述）："""
                 try:
@@ -82,12 +86,10 @@ class ChatBotSession:
                 except Exception as e:
                     self.log.error(f"Session {self.bot_id} 处理消息失败：{e}", exc_info=True)
                     self.log.error(f"{e}")
-
     async def send_text_message(self,text:str,group_id:int):
         self.log.info("尝试发送消息到adapter")
         payload = {"text": text, "group_id": group_id}
         await self.send_queue.put(payload)
-
     async def stop_session(self):
         """停止session任务"""
         self.is_running = False
