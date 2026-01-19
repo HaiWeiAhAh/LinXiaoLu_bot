@@ -233,10 +233,22 @@ class Bot:
                 self.log.debug(f"暂不支持的消息类型：{message_type}，仅支持群聊消息")
         except Exception as e:
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
-    async def command_debug(self, msg:str) -> bool:
+    def command_debug(self, msg:str) -> bool:
         self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
         if msg == "/view_stream_msg":
-            await self.test_Stream_msg()
+            self.log.info("===== 开始打印所有消息流 =====")
+            if not self.msg_stream:
+                self.log.info("暂无消息流数据")
+                return True
+
+            for stream in self.msg_stream:
+                # 打印消息流基本信息
+                self.log.info(
+                    f"【群ID: {stream.stream_group_id}】消息流ID: {stream.stream_id} | 创建时间: {datetime.datetime.fromtimestamp(stream.crate_time).strftime('%Y-%m-%d %H:%M:%S')} | 消息数: {len(stream.stream_msg)}")
+                # 打印该群的每条消息
+                for idx, msg in enumerate(stream.stream_msg, 1):
+                    self.log.info(f"  消息{idx}: {msg}")
+            self.log.info("===== 消息流打印结束 =====\n")
             return True
         if msg == "/view_stream_inner_os":
             for bot_session,task in self.bot_session.values():

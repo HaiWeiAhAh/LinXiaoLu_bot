@@ -5,7 +5,7 @@ from utils.config import ConfigManager
 
 
 # LLM_API.py 修正
-async def UseAPI(current_uesrmsg, global_cfg: ConfigManager, llm_role: str = None, history: list | None = None):
+async def UseAPI(current_uesrmsg, global_cfg: ConfigManager, llm_role: str = None, history: list = None):
     """
     :内部方法
     :current_uesrmsg:当前用户发送的消息
