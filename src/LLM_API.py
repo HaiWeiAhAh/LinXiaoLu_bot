@@ -20,8 +20,10 @@ async def UseAPI(current_uesrmsg, global_cfg: ConfigManager, llm_role: str = Non
         # 历史消息构建
         if history:  # 修复：先判断history是否存在，再遍历
             for user_msg, ai_msg in history:
-                message.append({'role': 'user', 'content': user_msg})
-                message.append({'role': 'assistant', 'content': ai_msg})
+                if user_msg:
+                    message.append({'role': 'user', 'content': user_msg})
+                if ai_msg:
+                    message.append({'role': 'assistant', 'content': ai_msg})
         # 添加当前用户消息
         message.append({'role': 'user', 'content': current_uesrmsg})
 
