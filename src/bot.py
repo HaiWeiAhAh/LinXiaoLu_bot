@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime
+import re
 import time
 import uuid
 
@@ -192,6 +193,9 @@ class Bot:
                         text_message += text_val
                     else:
                         self.log.debug(f"暂不支持的消息段类型：{message_dict.get('type')}")
+                #指令调试
+                if self.command_debug(text_message):
+                    return
 
                 # 构造格式化消息
                 send_time = msg.get("time", datetime.datetime.now().timestamp())
@@ -229,6 +233,19 @@ class Bot:
                 self.log.debug(f"暂不支持的消息类型：{message_type}，仅支持群聊消息")
         except Exception as e:
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
+    async def command_debug(self, msg:str) -> bool:
+        self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
+        if msg == "/view_stream_msg":
+            await self.test_Stream_msg()
+            return True
+        if msg == "/view_stream_inner_os":
+            for bot_session,task in self.bot_session.values():
+                self.log.debug(f"当前机器人:{bot_session.bot_id}的内心os如下：")
+                for msg in bot_session.bot_action_memory:
+                    self.log.debug(msg)
+            return True
+        self.log.debug("未找到指令")
+        return False
 
     async def create_and_start_bot_session(self,message_stream:MessageStreamObject):
         session = ChatBotSession(cfg=self.cfg,log=self.log,message_stream=message_stream,send_message_queue=self.send_message_queue)
@@ -248,11 +265,6 @@ class Bot:
                     await self.message_handle(msg)
                     # 标记消息处理完成（队列任务追踪）
                     self.message_queue.task_done()
-                    #打印聊天流
-                    if time.time() - last_print_time >= print_interval:
-                        await self.test_Stream_msg()
-                        last_print_time = time.time()
-                    self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
                 except asyncio.TimeoutError:
                     continue  # 超时继续循环，检测是否需要退出
         except asyncio.CancelledError:
