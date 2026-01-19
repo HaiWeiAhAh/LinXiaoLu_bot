@@ -56,8 +56,15 @@ class ChatBotSession:
         self.bot_id = uuid.uuid4()
         self.send_queue = send_message_queue
         self.message_stream = message_stream
+        self.bot_action_memory =[] #存储bot的行为记忆
         self.session_task = None
         self.is_running = False
+    async def build_action_memory_unit(self,action:str):
+        now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        action_memory = f"[{now_str_time}]:{action}]"
+        self.bot_action_memory.append(("",action_memory))
+    async def get_action_memory(self)->list:
+        return self.bot_action_memory
     async def start_session(self):
         self.is_running = True
         self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
@@ -68,19 +75,42 @@ class ChatBotSession:
                 await asyncio.sleep(0.1)
             else:
                 msg = await self.message_stream.get_new_message()
-                template_msg = f"""你注意到了这个群聊，这个群聊的天聊天记录如下
+                template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
 {msg}
-生成符合角色身份的回复：并附带你的内心想法"""
+请你完成以下两项任务，输出格式严格遵循要求：
+1.  基于聊天记录的语境和角色身份，生成一句符合人设的**群聊回复**；
+2.  以第一人称视角，撰写一段**内心想法（内心OS）**，想法要贴合角色当下的真实心理活动，和实际回复可以存在反差或呼应。
+输出格式要求：
+【实际回复】：[这里填写符合角色身份的群聊回复内容]
+【内心OS】：[这里填写第一人称的真实内心想法]
+额外约束：
+-  禁止添加任何拟人化动作描述（如“拍了拍群友”“翻了个白眼”等）；
+-  内心OS和实际回复的语气可以不一致，想法要真实直白，不用刻意迎合群聊氛围；
+-  回复和想法均需口语化，符合日常群聊的说话习惯。"""
                 try:
-                    response = await UseAPI(current_uesrmsg=template_msg,global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
+                    #获取ai的内心活动和实际回复
+                    response = await UseAPI(current_uesrmsg=template_msg,history=self.bot_action_memory,global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
+                    #区分ai的内心活动和实际回复
+                    result ={}
+                    patterns = {
+                        'actual_reply': r'【实际回复】\s*[:：]\s*(.+)',
+                        'inner_os': r'【内心OS】\s*[:：]\s*(.+)',
+                    }
+                    for key,pattern in patterns.items():
+                        match = re.search(pattern,msg)
+                        if match:
+                            result[key] = match.group(1).strip()
+                        else:
+                            result[key] = result[key].strip()
+                    await self.build_action_memory_unit(result["inner_os"])
                     await self.send_text_message(
-                        text=response,
+                        text=result["actual_reply"],
                         group_id=self.message_stream.stream_group_id
                     )
                     #获取自己消息的
                     now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     alias_name = self.cfg.get("setup","alias_name")
-                    str_msg = f"{now_str_time} [{alias_name}]: {response}"#将ai的回复添加进聊天流
+                    str_msg = f"{now_str_time} [{alias_name}]: {result['actual_reply']}"#将ai的回复添加进聊天流
                     await self.message_stream.add_new_message(str_msg,self_add=True)
                     self.log.info(f"Session {self.bot_id} 已处理消息并回复：{response[:50]}...")
                 except Exception as e:
