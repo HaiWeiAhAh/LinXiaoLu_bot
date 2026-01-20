@@ -113,7 +113,7 @@ class ChatBotSession:
                     alias_name = self.cfg.get("setup","alias_name")
                     str_msg = f"{now_str_time} [{alias_name}]: {result['actual_reply']}"#将ai的回复添加进聊天流
                     await self.message_stream.add_new_message(str_msg,self_add=True)
-                    self.log.info(f"Session {self.bot_id} 消息：{response[:200]}...")
+                    self.log.info(f"Session {self.bot_id} 消息：{response}...")
                 except Exception as e:
                     self.log.error(f"Session {self.bot_id} 处理消息失败：{e}", exc_info=True)
                     self.log.error(f"{e}")
