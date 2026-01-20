@@ -85,9 +85,9 @@ class ChatBotSession:
 【实际回复】：[这里填写符合角色身份的群聊回复内容]
 【内心OS】：[这里填写第一人称的真实内心想法]
 额外约束：
--  禁止添加任何拟人化动作描述（如“拍了拍群友”“翻了个白眼”等）；
--  内心OS和实际回复的语气可以不一致，想法要真实直白，不用刻意迎合群聊氛围；
--  回复和想法均需口语化，符合日常群聊的说话习惯。"""
+禁止添加任何拟人化动作描述（如“拍了拍群友”“翻了个白眼”等）；
+内心OS和实际回复的语气可以不一致，想法要真实直白，不用刻意迎合群聊氛围；
+回复和想法均需口语化，符合日常群聊的说话习惯。"""
                 try:
                     #获取ai的内心活动和实际回复
                     response = await UseAPI(current_uesrmsg=template_msg,history=self.bot_action_memory,global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
