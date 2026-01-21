@@ -208,7 +208,7 @@ class Bot:
                                                     model=self.cfg.get("openai", "model_vision"))
                             text_message += f"[表情包消息]：{response}"
                         else:
-                            self.log.warning(f"未知的消息类型{data.get("sub_type")}")
+                            self.log.warning(f"未知的消息类型{data.get('sub_type')}")
                     else:
                         self.log.debug(f"暂不支持的消息段类型：{message_dict.get('type')}")
                 # 构造格式化消息
