@@ -214,7 +214,7 @@ class Bot:
                         break
                 #指令调试
                 self.log.debug(f"text_message: {text_message}")
-                if self.command_debug(text_message,target_stream):
+                if await self.command_debug(text_message,target_stream):
                     return
 
                 if not target_stream:
