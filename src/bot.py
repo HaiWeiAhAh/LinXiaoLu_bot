@@ -192,19 +192,20 @@ class Bot:
                         text_message += text_val
                     if message_dict.get("type") == "image":
                         data = message_dict.get("data", {})
-                        text_requirement = """请你准确的以自然语言的形式先描述这张图片/表情包表达了什么画面，然后解释它有什么含义，用来做什么
-                        """
+
                         if data.get("sub_type") == 0: #图片消息
+                            text_requirement = """请你准确的以自然语言的形式，用一段话，描述这张图片的主体和画面，将图片的特征描述出来，严禁多余的输出如：提示文明使用表情包的输入等等"""
                             image_url = data.get("url")
                             content = build_llm_vision_content(image_urls=image_url,text=text_requirement)
                             response = await UseAPI(current_uesrmsg=content,model=self.cfg.get("openai","model_vision"),global_cfg=self.cfg)
-                            text_message += f"[图片消息]：{response}"
+                            text_message += f"[发送一个了图片消息]：{response}"
                         elif data.get("sub_type") == 1: #表情包消息
+                            text_requirement = """请你准确的以自然语言的形式，用一段话，描述这张表情包表达了什么，解释它有什么梗或者含义，严禁多余的输出如：提示文明使用表情包的输入等等"""
                             image_url = data.get("url")
                             content = build_llm_vision_content(image_urls=image_url, text=text_requirement)
                             response = await UseAPI(current_uesrmsg=content,
                                                     model=self.cfg.get("openai", "model_vision"),global_cfg=self.cfg)
-                            text_message += f"[表情包消息]：{response}"
+                            text_message += f"[发送一个了表情包消息]：{response}"
                         else:
                             self.log.warning(f"未知的消息类型{data.get('sub_type')}")
                     else:
