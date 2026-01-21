@@ -68,7 +68,7 @@ class ChatBotSession:
     async def get_action_memory(self,max_memory:int = 15)->list:
         """目前用不了"""
         return self.bot_action_memory[-max_memory]
-    async def start_session(self):
+    async def run_session(self):
         self.is_running = True
         self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
         while self.is_running:
@@ -81,7 +81,7 @@ class ChatBotSession:
                 template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
 {msg}
 请你完成以下两项任务，输出格式严格遵循要求：
-1.  基于聊天记录的语境和角色身份，生成一句符合人设的**群聊回复**；
+1.  基于聊天记录的语境和角色身份以及过往内心心理记忆，生成一句符合人设的**群聊回复**；
 2.  以第一人称视角，撰写一段**内心想法（内心OS）**，想法要贴合角色当下的真实心理活动，和实际回复可以存在反差或呼应。
 输出格式要求：
 【实际回复】：[这里填写符合角色身份的群聊回复内容]
@@ -270,7 +270,7 @@ class Bot:
 
     async def create_and_start_bot_session(self,message_stream:MessageStreamObject):
         session = ChatBotSession(cfg=self.cfg,log=self.log,message_stream=message_stream,send_message_queue=self.send_message_queue)
-        session_task = asyncio.create_task(session.start_session())
+        session_task = asyncio.create_task(session.run_session())
         self.bot_session[message_stream] = (session,session_task)
         self.log.info(f"ChatbotSession-{session.bot_id}对象已创建并激活")
     async def run(self):
