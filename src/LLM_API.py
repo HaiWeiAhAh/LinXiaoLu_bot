@@ -1,11 +1,26 @@
 
 from openai import OpenAI
+from openai.types.beta.threads import image_url
+
 from utils.config import ConfigManager
 
 
+def build_llm_vision_content(image_urls:str,text:str) ->list:
+    return [
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": f"{image_urls}",
+                "detail": "high"
+            }
+        },
+        {
+            "type": "text",
+            "text": f"{text}"
+        }
+    ]
 
-# LLM_API.py 修正
-async def UseAPI(current_uesrmsg, global_cfg: ConfigManager, llm_role: str = None, history: list = None):
+async def UseAPI(current_uesrmsg, global_cfg: ConfigManager,model:str, llm_role: str = None, history: list = None):
     """
     :内部方法
     :current_uesrmsg:当前用户发送的消息
@@ -34,7 +49,7 @@ async def UseAPI(current_uesrmsg, global_cfg: ConfigManager, llm_role: str = Non
         )
         # 构建回复（修复：传参为message而非current_uesrmsg）
         response = client.chat.completions.create(
-            model=global_cfg.get("openai", "model"),
+            model=model,
             messages=message,  # 关键修正
             stream=True
         )

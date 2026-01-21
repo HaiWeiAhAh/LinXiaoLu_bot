@@ -91,7 +91,7 @@ class ChatBotSession:
 回复和想法均需口语化，符合日常群聊的说话习惯。"""
                 try:
                     #获取ai的内心活动和实际回复
-                    response = await UseAPI(current_uesrmsg=template_msg,history=self.bot_action_memory[-self.max_memory:],global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
+                    response = await UseAPI(current_uesrmsg=template_msg,model=self.cfg.get("openai", "model"),history=self.bot_action_memory[-self.max_memory:],global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
                     #区分ai的内心活动和实际回复
                     result ={}
                     patterns = {
