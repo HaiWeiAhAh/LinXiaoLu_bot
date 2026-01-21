@@ -261,8 +261,9 @@ class Bot:
                 self.log.debug(f"当前机器人:{bot_session.bot_id}的内心os如下：")
                 await session.send_text_message(text=f"当前机器人:{bot_session.bot_id}的内心os如下：",group_id=stream_obj.stream_group_id)
                 for msg in bot_session.bot_action_memory:
-                    await session.send_text_message(text=msg,group_id=stream_obj.stream_group_id)
-                    self.log.debug(msg)
+                    user,action_memory = msg
+                    await session.send_text_message(text=action_memory,group_id=stream_obj.stream_group_id)
+                    self.log.debug(action_memory)
             return True
         self.log.debug("未找到指令")
         return False
