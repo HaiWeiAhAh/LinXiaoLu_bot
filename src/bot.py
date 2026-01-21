@@ -5,8 +5,6 @@ import re
 import time
 import uuid
 
-from pyexpat.errors import messages
-
 from src.LLM_API import UseAPI,build_llm_vision_content
 
 class MessageStreamObject:
@@ -199,13 +197,13 @@ class Bot:
                         if data.get("sub_type") == 0: #图片消息
                             image_url = data.get("url")
                             content = build_llm_vision_content(image_urls=image_url,text=text_requirement)
-                            response = await UseAPI(current_uesrmsg=content,model=self.cfg.get("openai","model_vision"))
+                            response = await UseAPI(current_uesrmsg=content,model=self.cfg.get("openai","model_vision"),global_cfg=self.cfg)
                             text_message += f"[图片消息]：{response}"
                         elif data.get("sub_type") == 1: #表情包消息
                             image_url = data.get("url")
                             content = build_llm_vision_content(image_urls=image_url, text=text_requirement)
                             response = await UseAPI(current_uesrmsg=content,
-                                                    model=self.cfg.get("openai", "model_vision"))
+                                                    model=self.cfg.get("openai", "model_vision"),global_cfg=self.cfg)
                             text_message += f"[表情包消息]：{response}"
                         else:
                             self.log.warning(f"未知的消息类型{data.get('sub_type')}")
