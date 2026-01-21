@@ -58,14 +58,16 @@ class ChatBotSession:
         self.send_queue = send_message_queue
         self.message_stream = message_stream
         self.bot_action_memory =[] #存储bot的行为记忆
+        self.max_memory = self.cfg.get("setup","max_bot_memory")
         self.session_task = None
         self.is_running = False
     async def build_action_memory_unit(self,action:str):
         now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         action_memory = f"[{now_str_time}]:{action}]"
         self.bot_action_memory.append(("",action_memory))
-    async def get_action_memory(self)->list:
-        return self.bot_action_memory
+    async def get_action_memory(self,max_memory:int = 15)->list:
+        """目前用不了"""
+        return self.bot_action_memory[-max_memory]
     async def start_session(self):
         self.is_running = True
         self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
@@ -85,12 +87,11 @@ class ChatBotSession:
 【实际回复】：[这里填写符合角色身份的群聊回复内容]
 【内心OS】：[这里填写第一人称的真实内心想法]
 额外约束：
-禁止添加任何拟人化动作描述（如“拍了拍群友”“翻了个白眼”等）；
 内心OS和实际回复的语气可以不一致，想法要真实直白，不用刻意迎合群聊氛围；
 回复和想法均需口语化，符合日常群聊的说话习惯。"""
                 try:
                     #获取ai的内心活动和实际回复
-                    response = await UseAPI(current_uesrmsg=template_msg,history=self.bot_action_memory,global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
+                    response = await UseAPI(current_uesrmsg=template_msg,history=self.bot_action_memory[-self.max_memory],global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
                     #区分ai的内心活动和实际回复
                     result ={}
                     patterns = {
@@ -194,6 +195,7 @@ class Bot:
                     else:
                         self.log.debug(f"暂不支持的消息段类型：{message_dict.get('type')}")
                 #指令调试
+                self.log.debug(f"text_message: {text_message}")
                 if self.command_debug(text_message):
                     return
 
