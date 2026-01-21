@@ -194,11 +194,6 @@ class Bot:
                         text_message += text_val
                     else:
                         self.log.debug(f"暂不支持的消息段类型：{message_dict.get('type')}")
-                #指令调试
-                self.log.debug(f"text_message: {text_message}")
-                if self.command_debug(text_message):
-                    return
-
                 # 构造格式化消息
                 send_time = msg.get("time", datetime.datetime.now().timestamp())
                 nickname = msg.get("sender", {}).get("nickname", "unknown")
@@ -217,6 +212,11 @@ class Bot:
                     if stream.stream_type == MessageStreamObject.GROUP and stream.stream_group_id == group_id:
                         target_stream = stream
                         break
+                #指令调试
+                self.log.debug(f"text_message: {text_message}")
+                if self.command_debug(text_message,target_stream):
+                    return
+
                 if not target_stream:
                     target_stream = MessageStreamObject(
                         group_id=group_id,
@@ -235,27 +235,33 @@ class Bot:
                 self.log.debug(f"暂不支持的消息类型：{message_type}，仅支持群聊消息")
         except Exception as e:
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
-    def command_debug(self, msg:str) -> bool:
+    async def command_debug(self, msg:str, stream_obj:MessageStreamObject) -> bool:
         self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
         if msg == "/view_stream_msg":
             self.log.info("===== 开始打印所有消息流 =====")
             if not self.msg_stream:
                 self.log.info("暂无消息流数据")
                 return True
+            session, task = self.bot_session.get(stream_obj)
 
             for stream in self.msg_stream:
                 # 打印消息流基本信息
                 self.log.info(
                     f"【群ID: {stream.stream_group_id}】消息流ID: {stream.stream_id} | 创建时间: {datetime.datetime.fromtimestamp(stream.crate_time).strftime('%Y-%m-%d %H:%M:%S')} | 消息数: {len(stream.stream_msg)}")
+                await session.send_text_message(text=f"【群ID: {stream.stream_group_id}】消息流ID: {stream.stream_id} | 创建时间: {datetime.datetime.fromtimestamp(stream.crate_time).strftime('%Y-%m-%d %H:%M:%S')} | 消息数: {len(stream.stream_msg)}", group_id=stream_obj.stream_group_id)
                 # 打印该群的每条消息
                 for idx, msg in enumerate(stream.stream_msg, 1):
+                    await session.send_text_message(text=f"消息{idx}: {msg}", group_id=stream_obj.stream_group_id)
                     self.log.info(f"  消息{idx}: {msg}")
             self.log.info("===== 消息流打印结束 =====\n")
             return True
         if msg == "/view_stream_inner_os":
+            session, task = self.bot_session.get(stream_obj)
             for bot_session,task in self.bot_session.values():
                 self.log.debug(f"当前机器人:{bot_session.bot_id}的内心os如下：")
+                await session.send_text_message(text=f"当前机器人:{bot_session.bot_id}的内心os如下：",group_id=stream_obj.stream_group_id)
                 for msg in bot_session.bot_action_memory:
+                    await session.send_text_message(text=msg,group_id=stream_obj.stream_group_id)
                     self.log.debug(msg)
             return True
         self.log.debug("未找到指令")
