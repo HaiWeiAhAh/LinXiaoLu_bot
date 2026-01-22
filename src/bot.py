@@ -4,8 +4,10 @@ import datetime
 import re
 import time
 import uuid
-
+import random
+from functools import wraps
 from src.LLM_API import UseAPI,build_llm_vision_content
+
 
 class MessageStreamObject:
     """
@@ -74,7 +76,7 @@ class ChatBotSession:
                 continue
             if not self.message_stream.have_new_message:
                 await asyncio.sleep(0.1)
-            else:
+            elif random.random() < self.cfg.get("setup","probability_reply"): #概率回复
                 msg = await self.message_stream.get_new_message()
                 template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
 {msg}
@@ -116,6 +118,8 @@ class ChatBotSession:
                 except Exception as e:
                     self.log.error(f"Session {self.bot_id} 处理消息失败：{e}", exc_info=True)
                     self.log.error(f"{e}")
+                else:
+                    self.log.debug("概率不回复")
     async def send_text_message(self,text:str,group_id:int):
         self.log.info("尝试发送消息到adapter")
         payload = {"text": text, "group_id": group_id}
