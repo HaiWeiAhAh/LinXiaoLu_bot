@@ -76,6 +76,7 @@ class ChatBotSession:
                 await asyncio.sleep(0.1)
                 continue
             else:
+                msg = await self.message_stream.get_new_message()
                 if random.random() < self.cfg.get("setup","probability_reply"): #概率回复
                     await self.reply()
                 else:
