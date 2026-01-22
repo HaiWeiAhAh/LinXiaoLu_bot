@@ -76,50 +76,51 @@ class ChatBotSession:
                 continue
             if not self.message_stream.have_new_message:
                 await asyncio.sleep(0.1)
-            elif random.random() < self.cfg.get("setup","probability_reply"): #概率回复
-                msg = await self.message_stream.get_new_message()
-                template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
-{msg}
-请你完成以下两项任务，输出格式严格遵循要求：
-1.  基于聊天记录的语境和角色身份以及过往内心心理记忆，生成一句符合人设的**群聊回复**；
-2.  以第一人称视角，撰写一段**内心想法（内心OS）**，想法要贴合角色当下的真实心理活动，和实际回复可以存在反差或呼应。
-输出格式要求：
-【实际回复】：[这里填写符合角色身份的群聊回复内容]
-【内心OS】：[这里填写第一人称的真实内心想法]
-额外约束：
-内心OS和实际回复的语气可以不一致，想法要真实直白，不用刻意迎合群聊氛围；
-回复和想法均需口语化，符合日常群聊的说话习惯。"""
-                try:
-                    #获取ai的内心活动和实际回复
-                    response = await UseAPI(current_uesrmsg=template_msg,model=self.cfg.get("openai", "model"),history=self.bot_action_memory[-self.max_memory:],global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
-                    #区分ai的内心活动和实际回复
-                    result ={}
-                    patterns = {
-                        'actual_reply': r'【实际回复】\s*[:：]\s*(.+)',
-                        'inner_os': r'【内心OS】\s*[:：]\s*(.+)',
-                    }
-                    for key,pattern in patterns.items():
-                        match = re.search(pattern,response)
-                        if match:
-                            result[key] = match.group(1).strip()
-                        else:
-                            result[key] = ""
-                    await self.build_action_memory_unit(result["inner_os"])
-                    await self.send_text_message(
-                        text=result["actual_reply"],
-                        group_id=self.message_stream.stream_group_id
-                    )
-                    #获取自己消息的
-                    now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    alias_name = self.cfg.get("setup","alias_name")
-                    str_msg = f"{now_str_time} [{alias_name}]: {result['actual_reply']}"#将ai的回复添加进聊天流
-                    await self.message_stream.add_new_message(str_msg,self_add=True)
-                    self.log.info(f"Session {self.bot_id} 消息：{response}...")
-                except Exception as e:
-                    self.log.error(f"Session {self.bot_id} 处理消息失败：{e}", exc_info=True)
-                    self.log.error(f"{e}")
-                else:
-                    self.log.debug("概率不回复")
+            else:
+                if random.random() < self.cfg.get("setup","probability_reply"): #概率回复
+                    msg = await self.message_stream.get_new_message()
+                    template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
+    {msg}
+    请你完成以下两项任务，输出格式严格遵循要求：
+    1.  基于聊天记录的语境和角色身份以及过往内心心理记忆，生成一句符合人设的**群聊回复**；
+    2.  以第一人称视角，撰写一段**内心想法（内心OS）**，想法要贴合角色当下的真实心理活动，和实际回复可以存在反差或呼应。
+    输出格式要求：
+    【实际回复】：[这里填写符合角色身份的群聊回复内容]
+    【内心OS】：[这里填写第一人称的真实内心想法]
+    额外约束：
+    内心OS和实际回复的语气可以不一致，想法要真实直白，不用刻意迎合群聊氛围；
+    回复和想法均需口语化，符合日常群聊的说话习惯。"""
+                    try:
+                        #获取ai的内心活动和实际回复
+                        response = await UseAPI(current_uesrmsg=template_msg,model=self.cfg.get("openai", "model"),history=self.bot_action_memory[-self.max_memory:],global_cfg=self.cfg,llm_role=self.cfg.get("setup","setting"))
+                        #区分ai的内心活动和实际回复
+                        result ={}
+                        patterns = {
+                            'actual_reply': r'【实际回复】\s*[:：]\s*(.+)',
+                            'inner_os': r'【内心OS】\s*[:：]\s*(.+)',
+                        }
+                        for key,pattern in patterns.items():
+                            match = re.search(pattern,response)
+                            if match:
+                                result[key] = match.group(1).strip()
+                            else:
+                                result[key] = ""
+                        await self.build_action_memory_unit(result["inner_os"])
+                        await self.send_text_message(
+                            text=result["actual_reply"],
+                            group_id=self.message_stream.stream_group_id
+                        )
+                        #获取自己消息的
+                        now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        alias_name = self.cfg.get("setup","alias_name")
+                        str_msg = f"{now_str_time} [{alias_name}]: {result['actual_reply']}"#将ai的回复添加进聊天流
+                        await self.message_stream.add_new_message(str_msg,self_add=True)
+                        self.log.info(f"Session {self.bot_id} 消息：{response}...")
+                    except Exception as e:
+                        self.log.error(f"Session {self.bot_id} 处理消息失败：{e}", exc_info=True)
+                        self.log.error(f"{e}")
+                    else:
+                        self.log.debug("概率不回复")
     async def send_text_message(self,text:str,group_id:int):
         self.log.info("尝试发送消息到adapter")
         payload = {"text": text, "group_id": group_id}
