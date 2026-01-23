@@ -76,10 +76,10 @@ class ChatBotSession:
                 await asyncio.sleep(0.1)
                 continue
             else:
-                msg = await self.message_stream.get_new_message()
                 if random.random() < self.cfg.get("setup","probability_reply"): #概率回复
                     await self.reply()
                 else:
+                    msg = await self.message_stream.get_new_message()
                     self.log.debug("概率，不回复")
                     await asyncio.sleep(0.1)
                     continue
@@ -99,8 +99,10 @@ class ChatBotSession:
             回复和想法均需口语化，符合日常群聊的说话习惯。"""
         try:
             # 获取ai的内心活动和实际回复
-            response = await UseAPI(current_uesrmsg=template_msg, model=self.cfg.get("openai", "model"),
-                                    history=self.bot_action_memory[-self.max_memory:], global_cfg=self.cfg,
+            response = await UseAPI(current_uesrmsg=template_msg,
+                                    model=self.cfg.get("openai", "model"),
+                                    history=self.bot_action_memory[-self.max_memory:],
+                                    global_cfg=self.cfg,
                                     llm_role=self.cfg.get("setup", "setting"))
             # 区分ai的内心活动和实际回复
             result = {}
@@ -142,6 +144,10 @@ class ChatBotSession:
             except asyncio.CancelledError:
                 pass
         self.log.info(f"Session {self.bot_id} 已停止（群ID：{self.message_stream.stream_group_id}）")
+class Action:
+    def __init__(self,cfg,log,message_stream:MessageStreamObject):
+        self.cfg = cfg
+        self.log = log
 class Bot:
     def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log
