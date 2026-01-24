@@ -135,10 +135,10 @@ class Action:
 可用动作工具以及使用规则：
 工具列表：{{tools}}
 输出格式（严格遵循，不要输出多余的内容，仅输出以下内容）
-【决策核心逻辑】：（结合记忆、上下文与人设，用一句话说明决策依据，无多余文字/解释/换行）
-1.【主动作】：（工具标识） | 【决策依据】：（选此动作的原因） | 【执行参数】：（具体参数，无则填“无”）
-2.【辅助动作1】：（工具标识/无） | 【决策依据】：（原因/无） | 【执行参数】：（参数/无）
-3.【辅助动作2】：（工具标识/无） | 【决策依据】：（原因/无） | 【执行参数】：（参数/无"""
+【决策核心逻辑】（结合记忆、上下文与人设，用一句话说明决策依据，无多余文字/解释/换行）
+1.【主动作】（工具标识）【决策依据】（选此动作的原因）【执行参数】（具体参数，无则填“无”）
+2.【辅助动作1】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无）
+3.【辅助动作2】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无)"""
     async def add_until_action_memory(self,decision:str):
         now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         action_memory = f"[{now_str_time}]:{decision}]"
@@ -146,81 +146,87 @@ class Action:
     async def get_until_action_memory(self)->str:
         return self.action_memory
 
-    async def parsing_decision(self,llm_response:str)->dict:
+    async def parsing_decision(self,decision_text:str)->dict:
         """
-                决策解析入口：将LLM原始响应解析为结构化字典（适配后续执行）
-                :param llm_response: generate_decision返回的LLM原始决策字符串
-                :return: 结构化决策字典，解析失败则返回默认静默决策
-                返回格式示例：
-                {
-                    "decision_logic": "过往答应帮小吕找资源，当前他@我询问，人设要求热心帮忙，故决策回复+下载+发送",
-                    "main_action": {"action": "REPLY", "reason": "告知用户资源下载进度", "params": "小吕，资源正在下载～"},
-                    "aux_action1": {"action": "DOWNLOAD", "reason": "为用户下载指定资源", "params": "https://xxx.com/resource.zip"},
-                    "aux_action2": {"action": "SEND_FILE", "reason": "将下载的资源发送给用户", "params": "https://xxx.com/resource.zip | 小吕"}
-                }
-                """
-        # 定义默认决策：解析失败时降级为静默观察
-        default_decision = {
-            "decision_logic": "LLM响应解析失败，默认执行静默观察",
-            "main_action": {"action": "SILENT", "reason": "解析失败", "params": "无"},
+            切割解析决策文本，提取决策核心逻辑+主动作+两个辅助动作的结构化数据
+            :param decision_text: 原始决策文本（符合指定格式的字符串）
+            :return: 结构化字典，解析失败返回默认静默决策
+            示例返回格式：
+            {
+                "decision_logic": "过往答应帮用户找资源，当前用户@询问进度，人设热心需及时回应",
+                "main_action": {"action": "REPLY", "reason": "告知用户资源下载中", "params": "你要的资源正在下载，稍等～"},
+                "aux_action1": {"action": "DOWNLOAD", "reason": "下载用户指定的资源", "params": "https://xxx.com/resource.zip"},
+                "aux_action2": {"action": "SEND_FILE", "reason": "下载完成后发送给用户", "params": "https://xxx.com/resource.zip | 用户名"}
+            }
+            """
+        # 定义默认返回值（解析失败/格式错误时，默认静默观察）
+        default_result = {
+            "decision_logic": "解析失败，无有效决策逻辑",
+            "main_action": {"action": "SILENT", "reason": "无", "params": "无"},
             "aux_action1": {"action": "无", "reason": "无", "params": "无"},
             "aux_action2": {"action": "无", "reason": "无", "params": "无"}
         }
-        if not llm_response:
-            self.log.warning("LLM响应为空，直接返回默认静默决策")
-            return default_decision
+
+        if not decision_text or not decision_text.strip():
+            return default_result
 
         try:
-            self.log.info("开始解析LLM动作决策响应")
-            parsed_result = default_decision.copy()
-            # 1. 解析【决策核心逻辑】（兼容中英文冒号、空格）
-            logic_pattern = r'【决策核心逻辑】\s*[:：]\s*(\(.+?\))'
-            logic_match = re.search(logic_pattern, llm_response, re.DOTALL)
+            # 步骤1：预处理文本 - 去除首尾空白、按换行分割、过滤空行
+            text = decision_text.strip()
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            result = default_result.copy()
+
+            # 步骤2：解析【决策核心逻辑】（兼容中英文括号/前后空格）
+            logic_pattern = r'【决策核心逻辑】\s*[（(](.*?)[）)]'
+            logic_match = re.search(logic_pattern, lines[0], re.DOTALL)
             if logic_match:
-                parsed_result["decision_logic"] = logic_match.group(1).strip("()")  # 去除外层括号
+                result["decision_logic"] = logic_match.group(1).strip()
 
-            # 2. 定义动作解析通用正则（适配主动作/辅助动作，兼容中英文冒号、空格、换行）
-            action_pattern = r'【(.*?)】\s*[:：]\s*(.+?)\s*\|\s*【决策依据】\s*[:：]\s*(.+?)\s*\|\s*【执行参数】\s*[:：]\s*(.+?)(?=\n|$)'
+            # 步骤3：定义通用动作解析正则（适配【关键词】(内容) 格式，兼容中英文括号/空格）
+            action_pattern = r'【(.*?)】\s*[（(](.*?)[）)]'
 
-            # 3. 解析【主动作】
-            main_match = re.search(r'1\.【主动作】.*?' + action_pattern, llm_response, re.DOTALL)
-            if main_match:
-                parsed_result["main_action"] = {
-                    "action": main_match.group(2).strip(),
-                    "reason": main_match.group(3).strip().replace("（无）", "无"),
-                    "params": main_match.group(4).strip().replace("（无）", "无")
-                }
+            # 步骤4：解析主动作（第2行，固定为1.【主动作】开头）
+            if len(lines) >= 2 and lines[1].startswith('1.【主动作】'):
+                main_matches = re.findall(action_pattern, lines[1])
+                if len(main_matches) >= 3:
+                    result["main_action"] = {
+                        "action": main_matches[0][1].strip().upper(),  # 工具标识大写统一
+                        "reason": main_matches[1][1].strip(),
+                        "params": main_matches[2][1].strip() if main_matches[2][1].strip() else "无"
+                    }
 
-            # 4. 解析【辅助动作1】
-            aux1_match = re.search(r'2\.【辅助动作1】.*?' + action_pattern, llm_response, re.DOTALL)
-            if aux1_match:
-                parsed_result["aux_action1"] = {
-                    "action": aux1_match.group(2).strip(),
-                    "reason": aux1_match.group(3).strip().replace("（无）", "无"),
-                    "params": aux1_match.group(4).strip().replace("（无）", "无")
-                }
+            # 步骤5：解析辅助动作1（第3行，固定为2.【辅助动作1】开头）
+            if len(lines) >= 3 and lines[2].startswith('2.【辅助动作1】'):
+                aux1_matches = re.findall(action_pattern, lines[2])
+                if len(aux1_matches) >= 3:
+                    result["aux_action1"] = {
+                        "action": aux1_matches[0][1].strip().upper() or "无",
+                        "reason": aux1_matches[1][1].strip() or "无",
+                        "params": aux1_matches[2][1].strip() or "无"
+                    }
 
-            # 5. 解析【辅助动作2】
-            aux2_match = re.search(r'3\.【辅助动作2】.*?' + action_pattern, llm_response, re.DOTALL)
-            if aux2_match:
-                parsed_result["aux_action2"] = {
-                    "action": aux2_match.group(2).strip(),
-                    "reason": aux2_match.group(3).strip().replace("（无）", "无"),
-                    "params": aux2_match.group(4).strip().replace("（无）", "无")
-                }
+            # 步骤6：解析辅助动作2（第4行，固定为3.【辅助动作2】开头）
+            if len(lines) >= 4 and lines[3].startswith('3.【辅助动作2】'):
+                aux2_matches = re.findall(action_pattern, lines[3])
+                if len(aux2_matches) >= 3:
+                    result["aux_action2"] = {
+                        "action": aux2_matches[0][1].strip().upper() or "无",
+                        "reason": aux2_matches[1][1].strip() or "无",
+                        "params": aux2_matches[2][1].strip() or "无"
+                    }
 
-            # 标准化动作标识（大写/去空格，避免LLM输出不规范）
+            # 标准化空值（将空字符串统一为"无"）
             for key in ["main_action", "aux_action1", "aux_action2"]:
-                parsed_result[key]["action"] = parsed_result[key]["action"].strip().upper()
-                if parsed_result[key]["action"] == "无":
-                    parsed_result[key]["action"] = ""
+                for field in ["action", "reason", "params"]:
+                    if not result[key][field]:
+                        result[key][field] = "无"
 
-            self.log.info(f"决策解析完成，核心逻辑：{parsed_result['decision_logic'][:50]}...")
-            self.log.debug(f"结构化决策结果：{parsed_result}")
-            return parsed_result
+            return result
+
         except Exception as e:
-            self.log.error(f"解析LLM决策响应失败：{str(e)}", exc_info=True)
-            return default_decision
+            # 任意解析异常都返回默认值，避免程序崩溃
+            print(f"决策文本解析失败：{str(e)}")
+            return default_result
     async def generate_decision(self,chat_context:str,bot_session:ChatBotSession):
         """
                 生成决策核心方法：拼接Prompt→调用LLM→返回原始决策响应
