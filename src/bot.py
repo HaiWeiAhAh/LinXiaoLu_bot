@@ -61,10 +61,11 @@ class ChatBotSession:
         self.max_memory = self.cfg.get("setup","max_bot_memory")
         self.session_task = None
         self.is_running = False
-    async def get_action_memory(self,max_memory:int = 15,llm_list:bool = False)->str|list[tuple[None,str]]:
+    async def get_action_memory(self,max_memory:int = 15,llm_list:bool = False)->str|list:
         if not self.bot_action:
             return "暂无历史动作记忆"
         action_memory = []
+        i = 0
         if not llm_list:
             for action in self.bot_action:
                 memory:str = await action.get_until_action_memory()
@@ -72,8 +73,8 @@ class ChatBotSession:
             memories = "\n".join(action_memory[-max_memory:])
             return memories
         else:
-            for action in self.bot_action:
-                action_memory.append(("",await action.get_until_action_memory()))
+            for action in self.bot_action[-max_memory:]:
+                action_memory.append((None,await action.get_until_action_memory()))
             return action_memory
 
     async def run_session(self):
@@ -121,9 +122,7 @@ class Action:
 "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
 "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
 ]
-        self.prompt= """
-行为一致性：所有言行必须严格贴合人设，保持连贯，禁止出现人设割裂。
-过往记忆（你做过的事）
+        self.prompt= """过往记忆（你做过的事）
 最近记忆：{{action_memory}}
 记忆联动要求：
 优先完成未完成的承诺或待办事项。
@@ -135,7 +134,7 @@ class Action:
 可用动作工具以及使用规则：
 工具列表：{{tools}}
 输出格式（严格遵循，不要输出多余的内容，仅输出以下内容）
-【决策核心逻辑】（结合记忆、上下文与人设，用一句话说明决策依据，无多余文字/解释/换行）
+【决策核心逻辑】（结合记忆、上下文与人设，以第一人称一句话总结你做了什么，为什么这么做，无多余文字/解释/换行）
 【主动作】（工具标识）【决策依据】（选此动作的原因）【执行参数】（具体参数，无则填“无”）
 【辅助动作】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无）
 【辅助动作】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无)"""
