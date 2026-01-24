@@ -136,9 +136,9 @@ class Action:
 工具列表：{{tools}}
 输出格式（严格遵循，不要输出多余的内容，仅输出以下内容）
 【决策核心逻辑】（结合记忆、上下文与人设，用一句话说明决策依据，无多余文字/解释/换行）
-1.【主动作】（工具标识）【决策依据】（选此动作的原因）【执行参数】（具体参数，无则填“无”）
-2.【辅助动作1】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无）
-3.【辅助动作2】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无)"""
+【主动作】（工具标识）【决策依据】（选此动作的原因）【执行参数】（具体参数，无则填“无”）
+【辅助动作】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无）
+【辅助动作】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无)"""
     async def add_until_action_memory(self,decision:str):
         now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         action_memory = f"[{now_str_time}]:{decision}]"
@@ -146,77 +146,103 @@ class Action:
     async def get_until_action_memory(self)->str:
         return self.action_memory
 
-    async def parsing_decision(self,decision_text:str)->dict:
+    async def parsing_decision(self,text:str)->dict:
         """
-        精准解析决策文本（修复REPLY提取失败问题，适配你的LLM返回格式）
-        :param decision_text: LLM返回的原始决策文本
-        :return: 结构化决策字典，确保正确提取主动作/辅助动作
+        严格解析指定格式文本，适配辅助动作0-2个、极简格式等所有缺失场景
+        核心格式：
+        【决策核心逻辑】决策依据
+        【主动作】工具标识【决策依据】原因【执行参数】参数
+        【辅助动作】工具标识【决策依据】原因【执行参数】参数（0-2个）
+        :param text: 待解析文本（按行分隔，支持任意字段缺失）
+        :return: 结构化字典，解析失败返回标准兜底值
         """
-        default_result = {
+        # 你要求的【标准兜底字典】，一字不改，所有失败场景均返回此值
+        DEFAULT_RESULT = {
             "decision_logic": "解析失败，无有效决策逻辑",
             "main_action": {"action": "SILENT", "reason": "无", "params": "无"},
             "aux_action1": {"action": "无", "reason": "无", "params": "无"},
             "aux_action2": {"action": "无", "reason": "无", "params": "无"}
         }
 
-        if not decision_text or not decision_text.strip():
-            print("决策文本为空，返回默认值")
-            return default_result
-
         try:
-            text = decision_text.strip()
-            lines = [line.strip() for line in text.split("\n") if line.strip()]
-            result = default_result.copy()
+            # 步骤1：文本预处理 - 按行分割，过滤空行/纯空白行，去除每行首尾空白
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            if not lines:  # 空文本直接兜底
+                return DEFAULT_RESULT
 
-            # 1. 解析决策核心逻辑（兼容有无括号，精准提取）
-            if lines and lines[0].startswith("【决策核心逻辑】"):
-                result["decision_logic"] = lines[0].replace("【决策核心逻辑】", "").strip()
-                print(f"提取决策逻辑：{result['decision_logic']}")
+            # 步骤2：逐行解析，提取标识和内容（按行匹配【xxx】，收集辅助动作列表）
+            decision_logic = ""  # 决策核心逻辑内容
+            main_action_content = ""  # 主动作原始内容
+            aux_action_contents = []  # 辅助动作原始内容（按顺序收集，最多2个）
 
-            # 2. 定义通用动作提取正则（强制匹配【关键词】(内容)，适配你的格式）
-            def extract_action(line: str) -> dict:
-                """提取单行动作的{action, reason, params}"""
-                action_dict = {"action": "无", "reason": "无", "params": "无"}
-                # 匹配【主动作/辅助动作】(值)、【决策依据】(值)、【执行参数】(值)
-                action_match = re.search(r"【主动作|辅助动作\d】\s*[（(](.*?)[）)]", line)
-                reason_match = re.search(r"【决策依据】\s*[（(](.*?)[）)]", line)
-                params_match = re.search(r"【执行参数】\s*[（(](.*?)[）)]", line)
-                # 有匹配结果则覆盖，无则保留"无"
-                if action_match:
-                    action_dict["action"] = action_match.group(1).strip().upper()
-                if reason_match:
-                    action_dict["reason"] = reason_match.group(1).strip()
-                if params_match:
-                    action_dict["params"] = params_match.group(1).strip()
-                return action_dict
+            for line in lines:
+                # 格式校验：行必须以【开头且包含】，否则直接判定格式错误
+                if not line.startswith("【") or "】" not in line:
+                    return DEFAULT_RESULT
+                # 仅分割第一个【】，避免内容中含【/】导致解析错乱
+                mark_part, content_part = line.split("】", 1)
+                mark = mark_part.replace("【", "").strip()  # 提取纯标识（无多余符号）
+                content = content_part.strip()  # 提取标识后的纯内容
 
-            # 3. 解析主动作（第2行，1.【主动作】开头，强制覆盖默认值）
-            if len(lines) >= 2 and lines[1].startswith("1.【主动作】"):
-                main_act = extract_action(lines[1])
-                result["main_action"] = main_act
-                print(f"提取主动作：{main_act}")
+                # 按标识分类存储，辅助动作按出现顺序收集（最多2个）
+                if mark == "决策核心逻辑":
+                    decision_logic = content
+                elif mark == "主动作":
+                    main_action_content = content
+                elif mark == "辅助动作":
+                    if len(aux_action_contents) < 2:
+                        aux_action_contents.append(content)
 
-            # 4. 解析辅助动作1（第3行，2.【辅助动作1】开头）
-            if len(lines) >= 3 and lines[2].startswith("2.【辅助动作1】"):
-                result["aux_action1"] = extract_action(lines[2])
+            # 步骤3：核心字段校验 - 必须同时有【决策核心逻辑】和【主动作】，否则兜底
+            if not decision_logic or not main_action_content:
+                return DEFAULT_RESULT
 
-            # 5. 解析辅助动作2（第4行，3.【辅助动作2】开头）
-            if len(lines) >= 4 and lines[3].startswith("3.【辅助动作2】"):
-                result["aux_action2"] = extract_action(lines[3])
+            # 步骤4：定义通用动作解析函数（主动作/辅助动作结构完全一致，统一解析）
+            def parse_single_action(act_content):
+                """
+                解析单个动作内容，适配任意子项缺失，缺失部分自动补「无」
+                输入：动作原始内容（如REPLY【决策依据】xxx【执行参数】无）
+                输出：{action: 工具标识, reason: 决策依据, params: 执行参数}
+                """
+                # 初始化默认值，所有子项缺失时均为「无」
+                action = "无"
+                reason = "无"
+                params = "无"
 
-            # 6. 标准化：将空值/纯空格值统一为"无"
-            for key in ["main_action", "aux_action1", "aux_action2"]:
-                for field in ["action", "reason", "params"]:
-                    val = result[key][field]
-                    if not val or val.isspace():
-                        result[key][field] = "无"
+                # 第一步：分割【决策依据】，提取工具标识
+                if "【决策依据】" in act_content:
+                    action_part, rest_content = act_content.split("【决策依据】", 1)
+                    action = action_part.strip() or "无"  # 工具标识为空则补「无」
+                    # 第二步：分割【执行参数】，提取决策依据和执行参数
+                    if "【执行参数】" in rest_content:
+                        reason_part, params_part = rest_content.split("【执行参数】", 1)
+                        reason = reason_part.strip() or "无"
+                        params = params_part.strip() or "无"
+                    else:
+                        reason = rest_content.strip() or "无"  # 无【执行参数】则剩余内容为决策依据
+                else:
+                    action = act_content.strip() or "无"  # 无【决策依据】则全部内容为工具标识
 
-            print(f"最终解析结果：{result}")
-            return result
+                return {"action": action, "reason": reason, "params": params}
 
-        except Exception as e:
-            print(f"解析决策文本异常：{str(e)}")
-            return default_result
+            # 步骤5：解析所有动作（适配辅助动作0-2个的场景）
+            main_action = parse_single_action(main_action_content)
+            # 辅助动作1：有则解析，无则返回默认无值
+            aux_action1 = parse_single_action(aux_action_contents[0]) if len(aux_action_contents) >= 1 else {"action": "无", "reason": "无", "params": "无"}
+            # 辅助动作2：有则解析，无则返回默认无值
+            aux_action2 = parse_single_action(aux_action_contents[1]) if len(aux_action_contents) >= 2 else {"action": "无", "reason": "无", "params": "无"}
+
+            # 步骤6：组装最终解析结果
+            return {
+                "decision_logic": decision_logic,
+                "main_action": main_action,
+                "aux_action1": aux_action1,
+                "aux_action2": aux_action2
+            }
+
+        # 捕获所有解析异常（分割错误、索引越界、格式异常等），统一返回标准兜底
+        except Exception:
+            return DEFAULT_RESULT
     async def generate_decision(self,chat_context:str,bot_session:ChatBotSession):
         """
                 生成决策核心方法：拼接Prompt→调用LLM→返回原始决策响应
@@ -280,21 +306,21 @@ class Action:
                 act_params = action_info["params"]
 
                 # 跳过无效动作（空/静默观察）
-                if not act or act == "SILENT":
+                if not act or "SILENT" in act:
                     self.log.debug(f"跳过{action_type}：{act or '无'}")
                     continue
 
                 # 3. 执行有效动作：调用对应动作方法，传递参数和群ID
                 self.log.info(f"执行{action_type}：{act} | 依据：{act_reason[:30]}... | 参数：{act_params[:50]}...")
                 try:
-                    if act == "REPLY":
+                    if "REPLY" in act:
                         # 文字回复：调用reply_action，传递执行参数和群ID
                         await self.reply_action(bot_session=bot_session,chat_context=chat_context)
-                    elif act == "DOWNLOAD":
+                    elif "DOWNLOAD" in act:
                         pass
                         # 下载资源：调用download_action，传递执行参数
                         #await self.download_action(bot_session, act_params)
-                    elif act == "SEND_FILE":
+                    elif"SEND_FILE" in act:
                         pass
                         # 发送文件：调用send_file_action，传递执行参数和群ID
                         #await self.send_file_action(bot_session, group_id, act_params)
