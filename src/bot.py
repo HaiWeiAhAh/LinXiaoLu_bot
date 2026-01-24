@@ -69,7 +69,7 @@ class ChatBotSession:
             for action in self.bot_action:
                 memory:str = await action.get_until_action_memory()
                 action_memory.append(memory)
-            memories = "\n".join(action_memory[-max_memory])
+            memories = "\n".join(action_memory[-max_memory:])
             return memories
         else:
             for action in self.bot_action:
