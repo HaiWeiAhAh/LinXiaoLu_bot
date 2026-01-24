@@ -148,18 +148,18 @@ class Action:
 
     async def parsing_decision(self,decision_text:str)->dict:
         """
-            切割解析决策文本，提取决策核心逻辑+主动作+两个辅助动作的结构化数据
-            :param decision_text: 原始决策文本（符合指定格式的字符串）
+            切割解析决策文本（适配有无括号、无参数、无辅助动作场景）
+            :param decision_text: 原始决策文本（你的指定格式）
             :return: 结构化字典，解析失败返回默认静默决策
-            示例返回格式：
+            返回格式：
             {
-                "decision_logic": "过往答应帮用户找资源，当前用户@询问进度，人设热心需及时回应",
-                "main_action": {"action": "REPLY", "reason": "告知用户资源下载中", "params": "你要的资源正在下载，稍等～"},
-                "aux_action1": {"action": "DOWNLOAD", "reason": "下载用户指定的资源", "params": "https://xxx.com/resource.zip"},
-                "aux_action2": {"action": "SEND_FILE", "reason": "下载完成后发送给用户", "params": "https://xxx.com/resource.zip | 用户名"}
+                "decision_logic": 核心决策依据,
+                "main_action": {"action": 工具标识, "reason": 决策依据, "params": 执行参数},
+                "aux_action1": {"action": 工具标识/无, "reason": 原因/无, "params": 参数/无},
+                "aux_action2": {"action": 工具标识/无, "reason": 原因/无, "params": 参数/无}
             }
             """
-        # 定义默认返回值（解析失败/格式错误时，默认静默观察）
+        # 解析失败时的默认返回值（静默观察）
         default_result = {
             "decision_logic": "解析失败，无有效决策逻辑",
             "main_action": {"action": "SILENT", "reason": "无", "params": "无"},
@@ -171,61 +171,62 @@ class Action:
             return default_result
 
         try:
-            # 步骤1：预处理文本 - 去除首尾空白、按换行分割、过滤空行
+            # 1. 文本预处理：去首尾空白、按换行分割、过滤空行，保证解析整洁
             text = decision_text.strip()
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
             result = default_result.copy()
 
-            # 步骤2：解析【决策核心逻辑】（兼容中英文括号/前后空格）
-            logic_pattern = r'【决策核心逻辑】\s*[（(](.*?)[）)]'
-            logic_match = re.search(logic_pattern, lines[0], re.DOTALL)
-            if logic_match:
-                result["decision_logic"] = logic_match.group(1).strip()
+            # 2. 解析【决策核心逻辑】- 兼容有无括号、任意后续内容
+            logic_pattern = r"^【决策核心逻辑】\s*(.*?)$"
+            if lines[0]:
+                logic_match = re.match(logic_pattern, lines[0], re.DOTALL)
+                if logic_match:
+                    result["decision_logic"] = logic_match.group(1).strip()
 
-            # 步骤3：定义通用动作解析正则（适配【关键词】(内容) 格式，兼容中英文括号/空格）
-            action_pattern = r'【(.*?)】\s*[（(](.*?)[）)]'
+            # 3. 定义通用动作解析正则 - 匹配【关键词】(内容) 格式，兼容中英文括号
+            action_field_pattern = r"【(.*?)】\s*[（(](.*?)[）)]"
 
-            # 步骤4：解析主动作（第2行，固定为1.【主动作】开头）
-            if len(lines) >= 2 and lines[1].startswith('1.【主动作】'):
-                main_matches = re.findall(action_pattern, lines[1])
-                if len(main_matches) >= 3:
+            # 4. 解析主动作（1.【主动作】开头，固定取工具标识、决策依据、执行参数3个字段）
+            if len(lines) >= 2 and lines[1].startswith("1.【主动作】"):
+                main_fields = re.findall(action_field_pattern, lines[1])
+                if len(main_fields) >= 3:
                     result["main_action"] = {
-                        "action": main_matches[0][1].strip().upper(),  # 工具标识大写统一
-                        "reason": main_matches[1][1].strip(),
-                        "params": main_matches[2][1].strip() if main_matches[2][1].strip() else "无"
+                        "action": main_fields[0][1].strip().upper() or "无",  # 工具标识大写统一
+                        "reason": main_fields[1][1].strip() or "无",
+                        "params": main_fields[2][1].strip() or "无"
                     }
 
-            # 步骤5：解析辅助动作1（第3行，固定为2.【辅助动作1】开头）
-            if len(lines) >= 3 and lines[2].startswith('2.【辅助动作1】'):
-                aux1_matches = re.findall(action_pattern, lines[2])
-                if len(aux1_matches) >= 3:
+            # 5. 解析辅助动作1（2.【辅助动作1】开头）
+            if len(lines) >= 3 and lines[2].startswith("2.【辅助动作1】"):
+                aux1_fields = re.findall(action_field_pattern, lines[2])
+                if len(aux1_fields) >= 3:
                     result["aux_action1"] = {
-                        "action": aux1_matches[0][1].strip().upper() or "无",
-                        "reason": aux1_matches[1][1].strip() or "无",
-                        "params": aux1_matches[2][1].strip() or "无"
+                        "action": aux1_fields[0][1].strip().upper() or "无",
+                        "reason": aux1_fields[1][1].strip() or "无",
+                        "params": aux1_fields[2][1].strip() or "无"
                     }
 
-            # 步骤6：解析辅助动作2（第4行，固定为3.【辅助动作2】开头）
-            if len(lines) >= 4 and lines[3].startswith('3.【辅助动作2】'):
-                aux2_matches = re.findall(action_pattern, lines[3])
-                if len(aux2_matches) >= 3:
+            # 6. 解析辅助动作2（3.【辅助动作2】开头）
+            if len(lines) >= 4 and lines[3].startswith("3.【辅助动作2】"):
+                aux2_fields = re.findall(action_field_pattern, lines[3])
+                if len(aux2_fields) >= 3:
                     result["aux_action2"] = {
-                        "action": aux2_matches[0][1].strip().upper() or "无",
-                        "reason": aux2_matches[1][1].strip() or "无",
-                        "params": aux2_matches[2][1].strip() or "无"
+                        "action": aux2_fields[0][1].strip().upper() or "无",
+                        "reason": aux2_fields[1][1].strip() or "无",
+                        "params": aux2_fields[2][1].strip() or "无"
                     }
 
-            # 标准化空值（将空字符串统一为"无"）
-            for key in ["main_action", "aux_action1", "aux_action2"]:
-                for field in ["action", "reason", "params"]:
-                    if not result[key][field]:
-                        result[key][field] = "无"
+            # 7. 标准化处理：将空值/无效值统一为"无"，避免后续执行报错
+            for action_key in ["main_action", "aux_action1", "aux_action2"]:
+                for field_key in ["action", "reason", "params"]:
+                    val = result[action_key][field_key]
+                    if not val or val.lower() == "无":
+                        result[action_key][field_key] = "无"
 
             return result
 
         except Exception as e:
-            # 任意解析异常都返回默认值，避免程序崩溃
-            print(f"决策文本解析失败：{str(e)}")
+            print(f"决策文本解析异常：{str(e)}")
             return default_result
     async def generate_decision(self,chat_context:str,bot_session:ChatBotSession):
         """
