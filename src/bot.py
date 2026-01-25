@@ -118,7 +118,7 @@ class Action:
         self.tools = [
 "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
 "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
-"SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：搜索关键字orJM号",
+"SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：关键字orJM号",
 "DOWNLOADCOMIC | 下载JM漫画 | 下载特定ID的JM漫画并发送给用户 | 参数：JM号（一般为6位数的纯数字）"
 ]
         self.prompt= """过往记忆（你做过的事）
