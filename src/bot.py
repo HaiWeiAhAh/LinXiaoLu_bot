@@ -350,7 +350,7 @@ class Action:
             #创建消息，
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id,)
             await new_group_msg.build_text_msg(text=response)
-            payload = await new_group_msg.return_complete_payload()
+            payload:dict = dict(await new_group_msg.return_complete_payload())
             #放入消息发送队列
             await bot_session.send_queue.put(payload)
             # 获取自己的消息

@@ -58,7 +58,7 @@ class Adapter:
                 #标记消息
                 request_uuid = str(uuid.uuid4())
                 conn = next(iter(self.active_connections))
-                await conn.send(payload)
+                await conn.send(dict(payload))
                 #获取消息响应
                 try:
                     response = await self.get_response(request_uuid)
