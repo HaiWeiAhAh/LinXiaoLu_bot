@@ -6,7 +6,7 @@ import time
 import uuid
 import random
 from src.LLM_API import UseAPI,build_llm_vision_content
-
+from src.napcat_msg import Group_Msg
 
 class MessageStreamObject:
     """
@@ -98,10 +98,6 @@ class ChatBotSession:
                     await asyncio.sleep(0.1)
                     continue
 
-    async def send_text_message(self,text:str,group_id:int):
-        self.log.info("尝试发送消息到adapter")
-        payload = {"text": text, "group_id": group_id}
-        await self.send_queue.put(payload)
     async def stop_session(self):
         """停止session任务"""
         self.is_running = False
@@ -352,11 +348,13 @@ class Action:
                                     global_cfg=self.cfg,
                                     llm_role=self.cfg.get("setup", "setting"))
 
-            await bot_session.send_text_message(
-                text=response,
-                group_id=bot_session.message_stream.stream_group_id,
-            )
-            # 获取自己消息的
+            #创建消息，
+            new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id,)
+            await new_group_msg.build_text_msg(text=response)
+            payload = await new_group_msg.return_complete_payload()
+            #放入消息发送队列
+            await bot_session.send_queue.put(payload)
+            # 获取自己的消息
             now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             alias_name = self.cfg.get("setup", "alias_name")
             str_msg = f"{now_str_time} [{alias_name}]: {response}"  # 将ai的回复添加进聊天流

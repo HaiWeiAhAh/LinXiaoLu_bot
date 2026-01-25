@@ -3,6 +3,8 @@ import asyncio
 import sys
 import json
 import uuid
+from logging import exception
+from typing import Any, Coroutine
 
 import websockets as Server
 
@@ -24,7 +26,7 @@ class Adapter:
     async def put_response(self,response:dict):
         self.response_queue.append(response)
 
-    async def get_response(self,request_id: str) -> dict:
+    async def get_response(self,request_id: str) -> Any | None:
         retry_count = 0
         retry_count_2=0
         max_retries = 50  # 10秒超时
@@ -46,48 +48,31 @@ class Adapter:
                 raise TimeoutError(f"请求超时，未找到响应{request_id}")
             await asyncio.sleep(0.2)
 
-
-    async def send_group_text_msg(self,msg:str,group_id:int):
-        try:
-            response = await self.send_message_to_napcat(
-                action="send_group_msg",
-                params={
-                    "group_id": group_id,
-                    "message":msg
-                }
-            )
-            if response.get("status") == "ok":
-                self.log.info("消息发送成功")
-
-            else:
-                self.log.warning(f"消息发送失败，napcat返回：{str(response)}")
-        except Exception as e:
-            self.log.error(f"发送消息错误{e}")
-    async def send_message_to_napcat(self, action: str, params: dict) -> dict:
-        request_uuid = str(uuid.uuid4())
-        payload = json.dumps({"action": action, "params": params, "echo": request_uuid})
-        conn = next(iter(self.active_connections))
-        await conn.send(payload)
-        try:
-            response = await self.get_response(request_uuid)
-        except TimeoutError:
-            self.log.error("发送消息超时，未收到响应")
-            return {"status": "error", "message": "timeout"}
-        except Exception as e:
-            self.log.error(f"发送消息失败: {e}")
-            return {"status": "error", "message": str(e)}
-        return response
-
     async def get_send_msg_to_napcat(self):
-        """循环从发送队列取消息，发送到Napcat"""
+        """循环从Bot中取出消息交给其他方法处理"""
         while True:
             try:
                 # 修复：使用重命名后的队列，且超时时间内检测取消信号
-                send_msg: dict = await asyncio.wait_for(
+                payload: dict = await asyncio.wait_for(
                     self.send_msg_queue.get(), timeout=1.0
                 )
                 self.send_msg_queue.task_done()
-                await self.send_group_text_msg(send_msg["text"], send_msg["group_id"])
+                #标记消息
+                request_uuid = str(uuid.uuid4())
+                conn = next(iter(self.active_connections))
+                await conn.send(payload)
+                #获取消息响应
+                try:
+                    response = await self.get_response(request_uuid)
+                    if response.get("status") == "ok":
+                        self.log.info("消息发送成功")
+                    else:
+                        self.log.warning(f"消息发送失败，napcat返回：{str(response)}")
+                except TimeoutError:
+                    self.log.error("发送消息超时，未收到响应")
+                    response = {"status": "error", "message": "timeout"}
+                except Exception as e:
+                    self.log.error(f"发送消息错误{e}")
             except asyncio.TimeoutError:
                 continue  # 超时继续，检测是否需要退出
             except asyncio.CancelledError:
@@ -95,6 +80,7 @@ class Adapter:
                 break
             except Exception as e:
                 self.log.error(f"处理发送队列消息错误: {e}")
+
     async def message_recv(self, server_connection: Server.ServerConnection):
         self.active_connections.add(server_connection)
         try:
