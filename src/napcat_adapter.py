@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import sys
 import json
 import uuid
-from logging import exception
-from typing import Any, Coroutine
+from typing import Any
 
 import websockets as Server
 

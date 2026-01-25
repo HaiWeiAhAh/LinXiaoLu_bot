@@ -1,6 +1,5 @@
 
 from openai import OpenAI
-from openai.types.beta.threads import image_url
 
 from utils.config import ConfigManager
 

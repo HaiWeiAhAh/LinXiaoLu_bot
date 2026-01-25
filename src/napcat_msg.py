@@ -1,5 +1,3 @@
-from tkinter.font import names
-
 
 class Group_Msg:
     def __init__(self,group_id):

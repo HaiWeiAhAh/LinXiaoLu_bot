@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime
-import re
 import time
 import uuid
 import random
