@@ -57,8 +57,10 @@ class Adapter:
                 self.send_msg_queue.task_done()
                 #标记消息
                 request_uuid = str(uuid.uuid4())
+                #注入echo字段
+                payload["echo"] = request_uuid
                 conn = next(iter(self.active_connections))
-                await conn.send(dict(payload))
+                await conn.send(json.dumps(payload, ensure_ascii=False))
                 #获取消息响应
                 try:
                     response = await self.get_response(request_uuid)
