@@ -4,6 +4,8 @@ import datetime
 import time
 import uuid
 import random
+
+from src.JM import search_comic, download_comics
 from src.LLM_API import UseAPI,build_llm_vision_content
 from src.napcat_msg import Group_Msg
 
@@ -116,6 +118,8 @@ class Action:
         self.tools = [
 "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
 "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
+"SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：搜索关键字orJM号",
+"DOWNLOADCOMIC | 下载JM漫画 | 下载特定ID的JM漫画并发送给用户 | 参数：JM号（一般为6位数的纯数字）"
 ]
         self.prompt= """过往记忆（你做过的事）
 最近记忆：{{action_memory}}
@@ -310,14 +314,10 @@ class Action:
                     if "REPLY" in act:
                         # 文字回复：调用reply_action，传递执行参数和群ID
                         await self.reply_action(bot_session=bot_session,chat_context=chat_context)
-                    elif "DOWNLOAD" in act:
-                        pass
-                        # 下载资源：调用download_action，传递执行参数
-                        #await self.download_action(bot_session, act_params)
-                    elif"SEND_FILE" in act:
-                        pass
-                        # 发送文件：调用send_file_action，传递执行参数和群ID
-                        #await self.send_file_action(bot_session, group_id, act_params)
+                    elif "SEARCHCOMIC" in act:
+                        await self.search_comic_action(comic_keyword=act_params,bot_session=bot_session)
+                    elif"DOWNLOADCOMIC" in act:
+                        await self.download_comic_action(bot_session=bot_session,comic_id=act_params)
                     else:
                         self.log.warning(f"不支持的动作类型：{act}，跳过执行")
                     #4.创建历史动作记忆
@@ -362,12 +362,36 @@ class Action:
         except Exception as e:
             self.log.error(f"Session {bot_session.bot_id} 处理消息失败：{e}", exc_info=True)
             self.log.error(f"{e}")
-    async def download_action(self,):
-        pass
+    async def search_comic_action(self,bot_session:ChatBotSession,comic_keyword:str|int):
+        text = search_comic(comic_keyword=comic_keyword)
+        # 创建消息，
+        new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
+        await new_group_msg.build_text_msg(text=text)
+        payload: dict = await new_group_msg.return_complete_payload()
+        # 放入消息发送队列
+        await bot_session.send_queue.put(payload)
+        # 获取自己的消息
+        now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        alias_name = self.cfg.get("setup", "alias_name")
+        str_msg = f"{now_str_time} [{alias_name}]: {text}"  # 将ai的回复添加进聊天流
+        await bot_session.message_stream.add_new_message(str_msg, self_add=True)
+        self.log.info(f"Session {bot_session.bot_id} 消息：{text}...")
     async def silent_action(self,):
         pass
-    async def send_file_action(self,):
-        pass
+    async def download_comic_action(self,bot_session:ChatBotSession,comic_id:int):
+        local_file_path = download_comics(comic_id=comic_id)
+        if local_file_path:
+            new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
+            await new_group_msg.build_file_msg(file_name=str(comic_id),file=local_file_path)
+            payload: dict = await new_group_msg.return_complete_payload()
+            # 放入消息发送队列
+            await bot_session.send_queue.put(payload)
+            # 获取自己的消息
+            now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            alias_name = self.cfg.get("setup", "alias_name")
+            str_msg = f"{now_str_time} [{alias_name}]: [发送了一个{comic_id}.pdf文件]"  # 将ai的回复添加进聊天流
+            await bot_session.message_stream.add_new_message(str_msg, self_add=True)
+            self.log.info(f"Session {bot_session.bot_id} 消息：{comic_id}.pdf文件发送成功")
 class Bot:
     def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log
