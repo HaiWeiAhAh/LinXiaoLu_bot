@@ -49,7 +49,8 @@ class Group_Msg:
 
                 # "file": "base64或DataUrl编码",
 
-                "name": file_name}
+                "name": file_name
+            }
         }
         self.msg.append(file_msg)
     async def return_complete_payload(self):

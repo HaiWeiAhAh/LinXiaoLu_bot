@@ -1,3 +1,5 @@
+import os
+
 from jmcomic import *
 
 def search_comic(comic_keyword: str | int, max_count: int = 5)->str|None:
@@ -66,10 +68,9 @@ async def download_comics(comic_id:int):
     try:
         download_album(comic_id,option)
         pdf_path = f"/root/LinXiaoLu_bot/JM-pdf/{comic_id}.pdf"
-        filename = os.path.basename(pdf_path)
 
-        async with aiofiles.open(pdf_path, mode='rb') as f:
-            file_data = await f.read()
+        with open(pdf_path, mode='rb') as f:
+            file_data = f.read()
         return file_data
     except MissingAlbumPhotoException as e:
         print(f'id={e.error_jmid}的本子不存在')
