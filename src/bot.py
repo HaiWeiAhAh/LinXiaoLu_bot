@@ -314,7 +314,7 @@ class Action:
                 try:
                     if "REPLY" in act:
                         # 文字回复：调用reply_action，传递执行参数和群ID
-                        await self.reply_action(bot_session=bot_session,chat_context=chat_context)
+                        await self.reply_action(bot_session=bot_session,chat_context=chat_context,inner_os=act_reason)
                     elif "SEARCHCOMIC" in act:
                         await self.search_comic_action(comic_keyword=act_params,bot_session=bot_session)
                     elif"DOWNLOADCOMIC" in act:
@@ -331,13 +331,14 @@ class Action:
         except Exception as e:
             self.log.error(f"执行动作决策总流程失败：{str(e)}", exc_info=True)
 
-    async def reply_action(self,bot_session:ChatBotSession,chat_context):
+    async def reply_action(self,bot_session:ChatBotSession,chat_context,inner_os:str):
         """
 
         :return: 返回动作的完成状态
         """
         template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
 {chat_context}
+你现在正在想：{inner_os}
 基于聊天记录的语境和角色身份以及过往内心心理记忆，生成一句符合人设的**群聊回复**；
 回复需口语化，符合日常群聊的说话习惯，不要输出多余的内容比如：(动作描述)仅输出要回复的内容"""
         try:
