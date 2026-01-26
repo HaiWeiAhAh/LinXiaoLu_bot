@@ -95,7 +95,7 @@ class Adapter:
 
     async def http_send(self, payload: dict):
         # 定义超时时间，避免无限等待（推荐设置）
-        timeout = aiohttp.ClientTimeout(total=10)
+        timeout = aiohttp.ClientTimeout(total=60)
         try:
             url = f"http://{self.http_server_ip}:{self.http_server_port}/{payload['action']}"
             payload.pop("action")
@@ -122,7 +122,7 @@ class Adapter:
             return {"status": "error", "message": f"aiohttp error: {str(e)}"}
         # 捕获JSON解析失败
         except ValueError as e:
-            self.log.error(f"响应体JSON解析失败：{str(e)}"[:300])
+            self.log.error(f"响应体JSON解析失败：{str(e)}"[:1000])
             return {"status": "error", "message": "json parse error"}
         except Exception as e:
             self.log.error(f"发送消息未知错误：{str(e)}")

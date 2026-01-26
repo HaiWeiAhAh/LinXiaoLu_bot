@@ -388,7 +388,7 @@ class Action:
         file_data = download_comics(comic_id=comic_id)
         if file_data:
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
-            await new_group_msg.build_file_msg(file_name=str(comic_id),file=file_data)
+            await new_group_msg.build_file_msg(file_name=f"{comic_id}.pdf",file=file_data)
             payload: dict = await new_group_msg.return_complete_http_payload()
             #选择发送方式
             send_msg =choice_send_tpye(payload=payload,send_type="http")
