@@ -63,7 +63,7 @@ def search_comic(comic_keyword: str | int, max_count: int = 5)->str|None:
         return "unknown"
     return "\n".join(result)
 
-async def download_comics(comic_id:int):
+def download_comics(comic_id:int):
     option = create_option_by_file('myoption.yml')
     try:
         download_album(comic_id,option)
