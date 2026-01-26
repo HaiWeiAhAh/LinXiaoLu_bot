@@ -352,7 +352,7 @@ class Action:
             #创建消息，
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id,)
             await new_group_msg.build_text_msg(text=response)
-            payload:dict = dict(await new_group_msg.return_complete_payload())
+            payload:dict = dict(await new_group_msg.return_complete_websocket_payload())
             #放入消息发送队列
             await bot_session.send_queue.put(payload)
             # 获取自己的消息
@@ -369,7 +369,7 @@ class Action:
         # 创建消息，
         new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
         await new_group_msg.build_text_msg(text=text)
-        payload: dict = await new_group_msg.return_complete_payload()
+        payload: dict = await new_group_msg.return_complete_websocket_payload()
         # 选择发送方式
         send_msg = choice_send_tpye(payload=payload, send_type="websocket")
         # 放入消息发送队列
@@ -387,7 +387,7 @@ class Action:
         if file_data:
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
             await new_group_msg.build_file_msg(file_name=str(comic_id),file=file_data)
-            payload: dict = await new_group_msg.return_complete_payload()
+            payload: dict = await new_group_msg.return_complete_http_payload()
             #选择发送方式
             send_msg =choice_send_tpye(payload=payload,send_type="http")
             # 放入消息发送队列

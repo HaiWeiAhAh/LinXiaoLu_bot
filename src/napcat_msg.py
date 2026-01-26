@@ -53,13 +53,19 @@ class Group_Msg:
             }
         }
         self.msg.append(file_msg)
-    async def return_complete_payload(self):
+    async def return_complete_websocket_payload(self):
         return {
             "action": "send_group_msg",
             "params":{
             "group_id": self.group_id,
             "message": self.msg
             }
+        }
+    async def return_complete_http_payload(self):
+        return {
+            "action": "send_group_msg",
+            "group_id": self.group_id,
+            "message": self.msg
         }
 class File_Msg:
     def __init__(self,file,name,folder):
