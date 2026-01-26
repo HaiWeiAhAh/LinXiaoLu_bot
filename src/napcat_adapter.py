@@ -110,7 +110,7 @@ class Adapter:
                     if res_data.get("status") == "ok":
                         self.log.info("消息发送成功")
                     else:
-                        self.log.warning(f"消息发送失败，napcat返回：{res_data[:300]}...")
+                        self.log.warning(f"消息发送失败，napcat返回：{json.dumps(res_data, ensure_ascii=False)[:300]}......")
                     return res_data
 
         except asyncio.TimeoutError:  # aiohttp的超时异常属于asyncio.TimeoutError
