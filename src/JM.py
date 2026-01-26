@@ -1,3 +1,4 @@
+import base64
 import os
 
 from jmcomic import *
@@ -71,7 +72,8 @@ def download_comics(comic_id:int):
 
         with open(pdf_path, mode='rb') as f:
             file_data = f.read()
-        return file_data
+        base64_str = base64.b64encode(file_data).decode('utf-8')
+        return base64_str
     except MissingAlbumPhotoException as e:
         print(f'id={e.error_jmid}的本子不存在')
 
