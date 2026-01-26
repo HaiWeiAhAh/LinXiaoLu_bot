@@ -5,7 +5,6 @@ import uuid
 from typing import Any
 
 import aiohttp
-import requests
 import websockets as Server
 
 send_message_queue = asyncio.Queue()
@@ -111,7 +110,7 @@ class Adapter:
                     if res_data.get("status") == "ok":
                         self.log.info("消息发送成功")
                     else:
-                        self.log.warning(f"消息发送失败，napcat返回：{res_data}")
+                        self.log.warning(f"消息发送失败，napcat返回：{res_data[:300]}...")
                     return res_data
 
         except asyncio.TimeoutError:  # aiohttp的超时异常属于asyncio.TimeoutError
@@ -123,7 +122,7 @@ class Adapter:
             return {"status": "error", "message": f"aiohttp error: {str(e)}"}
         # 捕获JSON解析失败
         except ValueError as e:
-            self.log.error(f"响应体JSON解析失败：{str(e)}")
+            self.log.error(f"响应体JSON解析失败：{str(e)}"[:300])
             return {"status": "error", "message": "json parse error"}
         except Exception as e:
             self.log.error(f"发送消息未知错误：{str(e)}")

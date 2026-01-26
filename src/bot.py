@@ -352,7 +352,7 @@ class Action:
             #创建消息，
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id,)
             await new_group_msg.build_text_msg(text=response)
-            payload:dict = dict(await new_group_msg.return_complete_websocket_payload())
+            payload:dict = dict(await new_group_msg.return_complete_http_payload())
             #放入消息发送队列
             await bot_session.send_queue.put(payload)
             # 获取自己的消息
@@ -397,7 +397,7 @@ class Action:
             alias_name = self.cfg.get("setup", "alias_name")
             str_msg = f"{now_str_time} [{alias_name}]: [发送了一个{comic_id}.pdf文件]"  # 将ai的回复添加进聊天流
             await bot_session.message_stream.add_new_message(str_msg, self_add=True)
-            self.log.info(f"Session {bot_session.bot_id} 消息：{comic_id}.pdf文件发送成功")
+            self.log.info(f"Session {bot_session.bot_id} 消息：{comic_id}.pdf文件正在发送")
         else:
             self.log.warning("文件不存在")
 class Bot:
