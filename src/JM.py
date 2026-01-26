@@ -68,12 +68,9 @@ def download_comics(comic_id:int):
     option = create_option_by_file('myoption.yml')
     try:
         download_album(comic_id,option)
-        pdf_path = f"/root/LinXiaoLu_bot/JM-pdf/{comic_id}.pdf"
+        pdf_path = f"file:///root/LinXiaoLu_bot/JM-pdf/{comic_id}.pdf"
 
-        with open(pdf_path, mode='rb') as f:
-            file_data = f.read()
-        base64_str = base64.b64encode(file_data).decode('utf-8')
-        return base64_str
+        return pdf_path
     except MissingAlbumPhotoException as e:
         print(f'id={e.error_jmid}的本子不存在')
 
