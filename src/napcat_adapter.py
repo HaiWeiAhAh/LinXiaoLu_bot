@@ -65,7 +65,7 @@ class Adapter:
                     payload = init_payload["payload"]
                     await self.http_send(payload)
                 else:
-                    self.log.warning(f"未知的send_type类型：{init_payload["send_type"]}")
+                    self.log.warning(f"未知的send_type类型：{init_payload['send_type']}")
             except asyncio.TimeoutError:
                 continue  # 超时继续，检测是否需要退出
             except asyncio.CancelledError:
