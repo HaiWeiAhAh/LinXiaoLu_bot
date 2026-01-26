@@ -4,6 +4,7 @@ import json
 import uuid
 from typing import Any
 
+import requests
 import websockets as Server
 
 send_message_queue = asyncio.Queue()
@@ -14,6 +15,8 @@ class Adapter:
         self.log = log
         self.host = cfg.get("adapter", "host")
         self.port = cfg.get("adapter", "port")
+        self.http_server_ip = cfg.get("adapter", "server_ip")
+        self.http_server_port = cfg.get("adapter", "server_port")
 
         self.active_connections = set()
         self.message_queue = global_message_queue#接受napcat消息并向bot转发消息的队列
@@ -50,29 +53,19 @@ class Adapter:
         """循环从Bot中取出消息交给其他方法处理"""
         while True:
             try:
-                # 修复：使用重命名后的队列，且超时时间内检测取消信号
-                payload: dict = await asyncio.wait_for(
+                #区分使用哪种发送发送payload
+                init_payload: dict = await asyncio.wait_for(
                     self.send_msg_queue.get(), timeout=1.0
                 )
                 self.send_msg_queue.task_done()
-                #标记消息
-                request_uuid = str(uuid.uuid4())
-                #注入echo字段
-                payload["echo"] = request_uuid
-                conn = next(iter(self.active_connections))
-                await conn.send(json.dumps(payload, ensure_ascii=False))
-                #获取消息响应
-                try:
-                    response = await self.get_response(request_uuid)
-                    if response.get("status") == "ok":
-                        self.log.info("消息发送成功")
-                    else:
-                        self.log.warning(f"消息发送失败，napcat返回：{str(response)}")
-                except TimeoutError:
-                    self.log.error("发送消息超时，未收到响应")
-                    response = {"status": "error", "message": "timeout"}
-                except Exception as e:
-                    self.log.error(f"发送消息错误{e}")
+                if init_payload["send_type"] == "websocket":
+                    payload = init_payload["payload"]
+                    await self.websocket_send(payload)
+                elif init_payload["send_type"] == "http":
+                    payload = init_payload["payload"]
+                    await self.http_send(payload)
+                else:
+                    self.log.warning(f"未知的send_type类型：{init_payload["send_type"]}")
             except asyncio.TimeoutError:
                 continue  # 超时继续，检测是否需要退出
             except asyncio.CancelledError:
@@ -80,6 +73,42 @@ class Adapter:
                 break
             except Exception as e:
                 self.log.error(f"处理发送队列消息错误: {e}")
+    async def websocket_send(self,payload:dict):
+        # 标记消息
+        request_uuid = str(uuid.uuid4())
+        # 注入echo字段
+        payload["echo"] = request_uuid
+        conn = next(iter(self.active_connections))
+        await conn.send(json.dumps(payload, ensure_ascii=False))
+        # 获取消息响应
+        try:
+            response = await self.get_response(request_uuid)
+            if response.get("status") == "ok":
+                self.log.info("消息发送成功")
+            else:
+                self.log.warning(f"消息发送失败，napcat返回：{str(response)}")
+        except TimeoutError:
+            self.log.error("发送消息超时，未收到响应")
+            response = {"status": "error", "message": "timeout"}
+        except Exception as e:
+            self.log.error(f"发送消息错误{e}")
+    async def http_send(self,payload:dict):
+        try:
+            url = f"http://{self.http_server_ip}:{self.http_server_port}/{payload['action']}"
+            payload.pop("action")
+            headers = {
+                'Content-Type': 'application/json'
+            }
+            response = requests.request("POST", url, headers=headers, data=payload)
+            if response.get("status") == "ok":
+                self.log.info("消息发送成功")
+            else:
+                self.log.warning(f"消息发送失败，napcat返回：{str(response)}")
+        except TimeoutError:
+            self.log.error("发送消息超时，未收到响应")
+            response = {"status": "error", "message": "timeout"}
+        except Exception as e:
+            self.log.error(f"发送消息错误{e}")
 
     async def message_recv(self, server_connection: Server.ServerConnection):
         self.active_connections.add(server_connection)

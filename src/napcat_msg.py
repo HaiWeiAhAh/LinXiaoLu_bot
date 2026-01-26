@@ -68,3 +68,9 @@ class File_Msg:
         self.folder = folder
     async def build_upload_file_msg(self):
         pass
+
+def choice_send_tpye(payload:dict,send_type:str):
+    return {
+        "send_type": send_type,
+        "payload": payload
+    }

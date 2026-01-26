@@ -7,7 +7,8 @@ import random
 
 from src.JM import search_comic, download_comics
 from src.LLM_API import UseAPI,build_llm_vision_content
-from src.napcat_msg import Group_Msg
+from src.napcat_msg import Group_Msg, choice_send_tpye
+
 
 class MessageStreamObject:
     """
@@ -368,8 +369,10 @@ class Action:
         new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
         await new_group_msg.build_text_msg(text=text)
         payload: dict = await new_group_msg.return_complete_payload()
+        # 选择发送方式
+        send_msg = choice_send_tpye(payload=payload, send_type="websocket")
         # 放入消息发送队列
-        await bot_session.send_queue.put(payload)
+        await bot_session.send_queue.put(send_msg)
         # 获取自己的消息
         now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         alias_name = self.cfg.get("setup", "alias_name")
@@ -384,8 +387,10 @@ class Action:
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
             await new_group_msg.build_file_msg(file_name=str(comic_id),file=file_data)
             payload: dict = await new_group_msg.return_complete_payload()
+            #选择发送方式
+            send_msg =choice_send_tpye(payload=payload,send_type="http")
             # 放入消息发送队列
-            await bot_session.send_queue.put(payload)
+            await bot_session.send_queue.put(send_msg)
             # 获取自己的消息
             now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             alias_name = self.cfg.get("setup", "alias_name")
