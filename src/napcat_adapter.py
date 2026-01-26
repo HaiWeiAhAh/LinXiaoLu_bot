@@ -4,6 +4,7 @@ import json
 import uuid
 from typing import Any
 
+import aiohttp
 import requests
 import websockets as Server
 
@@ -92,23 +93,41 @@ class Adapter:
             response = {"status": "error", "message": "timeout"}
         except Exception as e:
             self.log.error(f"发送消息错误{e}")
-    async def http_send(self,payload:dict):
+
+    async def http_send(self, payload: dict):
+        # 定义超时时间，避免无限等待（推荐设置）
+        timeout = aiohttp.ClientTimeout(total=10)
         try:
             url = f"http://{self.http_server_ip}:{self.http_server_port}/{payload['action']}"
             payload.pop("action")
-            headers = {
-                'Content-Type': 'application/json'
-            }
-            response = requests.request("POST", url, headers=headers, data=payload)
-            if response.get("status") == "ok":
-                self.log.info("消息发送成功")
-            else:
-                self.log.warning(f"消息发送失败，napcat返回：{str(response)}")
-        except TimeoutError:
+
+            # 异步上下文管理器：自动管理连接创建/关闭
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                # 异步POST请求，json参数用法与requests一致
+                async with session.post(url=url, json=payload) as response:
+                    # 异步解析JSON响应（aiohttp的关键异步方法）
+                    res_data = await response.json()
+
+                    if res_data.get("status") == "ok":
+                        self.log.info("消息发送成功")
+                    else:
+                        self.log.warning(f"消息发送失败，napcat返回：{res_data}")
+                    return res_data
+
+        except asyncio.TimeoutError:  # aiohttp的超时异常属于asyncio.TimeoutError
             self.log.error("发送消息超时，未收到响应")
-            response = {"status": "error", "message": "timeout"}
+            return {"status": "error", "message": "timeout"}
+        # 捕获aiohttp所有请求相关异常
+        except aiohttp.ClientError as e:
+            self.log.error(f"异步HTTP请求异常：{str(e)}")
+            return {"status": "error", "message": f"aiohttp error: {str(e)}"}
+        # 捕获JSON解析失败
+        except ValueError as e:
+            self.log.error(f"响应体JSON解析失败：{str(e)}")
+            return {"status": "error", "message": "json parse error"}
         except Exception as e:
-            self.log.error(f"发送消息错误{e}")
+            self.log.error(f"发送消息未知错误：{str(e)}")
+            return {"status": "error", "message": f"unknown error: {str(e)}"}
 
     async def message_recv(self, server_connection: Server.ServerConnection):
         self.active_connections.add(server_connection)
