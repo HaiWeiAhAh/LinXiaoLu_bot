@@ -379,10 +379,10 @@ class Action:
     async def silent_action(self,):
         pass
     async def download_comic_action(self,bot_session:ChatBotSession,comic_id:int):
-        local_file_path = download_comics(comic_id=comic_id)
-        if local_file_path:
+        file_data = download_comics(comic_id=comic_id)
+        if file_data:
             new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id, )
-            await new_group_msg.build_file_msg(file_name=str(comic_id),file=local_file_path)
+            await new_group_msg.build_file_msg(file_name=str(comic_id),file=file_data)
             payload: dict = await new_group_msg.return_complete_payload()
             # 放入消息发送队列
             await bot_session.send_queue.put(payload)
@@ -392,6 +392,8 @@ class Action:
             str_msg = f"{now_str_time} [{alias_name}]: [发送了一个{comic_id}.pdf文件]"  # 将ai的回复添加进聊天流
             await bot_session.message_stream.add_new_message(str_msg, self_add=True)
             self.log.info(f"Session {bot_session.bot_id} 消息：{comic_id}.pdf文件发送成功")
+        else:
+            self.log.warning("文件不存在")
 class Bot:
     def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
         self.log = log

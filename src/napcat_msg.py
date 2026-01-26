@@ -37,7 +37,7 @@ class Group_Msg:
             }
         }
         self.msg.insert(0,reply_msg)
-    async def build_file_msg(self,file_name:str,file:str):
+    async def build_file_msg(self,file_name:str,file):
         file_msg = {
             "type": "file",
             "data": {
