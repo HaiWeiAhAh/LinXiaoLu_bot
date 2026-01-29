@@ -456,7 +456,10 @@ class Bot:
                 if not group_id:
                     self.log.warning("消息缺少group_id，跳过处理")
                     return
-
+                #不处理xx群的消息
+                if group_id == self.cfg.get("bot", "ban_group_id_1"):
+                    self.log.info(f"{self.cfg.get('bot', 'ban_group_id_1')}群的消息，跳过处理")
+                    return
                 # 拼接纯文本消息
                 text_message = ""
                 for message_dict in messages:
