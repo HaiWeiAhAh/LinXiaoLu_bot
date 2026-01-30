@@ -1,10 +1,11 @@
 import configparser
 import os
+import json  # 新增：导入json模块
 from typing import Any, Optional
 
 
 class ConfigManager:
-    """简单实用的配置管理类（基于ini文件）"""
+    """简单实用的配置管理类（基于ini文件，扩展支持List/Dict类型）"""
 
     def __init__(self, config_file: str = "config.ini"):
         """
@@ -23,18 +24,28 @@ class ConfigManager:
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         """
-        读取通用配置项（自动处理类型）
+        读取通用配置项（自动处理类型：bool/int/float/str/list/dict，支持嵌套）
         :param section: 配置节（如database、logging）
         :param key: 配置键
-        :param default: 配置缺失时的默认值
+        :param default: 配置缺失时的默认值（支持list/dict类型）
         :return: 配置值（自动转换为对应类型）
         """
         try:
-            # 先尝试读取原始值
-            value = self.config.get(section, key)
+            # 先尝试读取原始值并去除首尾空格（避免JSON字符串前后空格导致解析失败）
+            value = self.config.get(section, key).strip()
 
-            # 自动类型转换（适配常见类型）
-            # 布尔值
+            # 核心新增：先尝试解析JSON，支持list/dict/嵌套复杂类型
+            try:
+                json_value = json.loads(value)
+                # 仅当解析结果是list或dict时返回，避免将JSON格式的数字/布尔值误解析
+                if isinstance(json_value, (list, dict)):
+                    return json_value
+            except json.JSONDecodeError:
+                # 非JSON格式，继续走原有类型转换逻辑
+                pass
+
+            # 原有自动类型转换逻辑（保持不变）
+            # 布尔值（true/false，不区分大小写）
             if value.lower() in ["true", "false"]:
                 return value.lower() == "true"
             # 整数
@@ -50,25 +61,24 @@ class ConfigManager:
             # 字符串（默认）
             return value
         except (configparser.NoSectionError, configparser.NoOptionError):
-            # 配置缺失时返回默认值
+            # 配置缺失时返回默认值（支持list/dict类型默认值）
             if default is not None:
                 return default
             raise KeyError(f"配置项 [{section}] {key} 不存在，且未设置默认值！")
 
     def get_section(self, section: str) -> dict:
         """
-        读取整个配置节的所有配置项
+        读取整个配置节的所有配置项（自动支持list/dict类型）
         :param section: 配置节名称
-        :return: 该节的所有配置项（键值对）
+        :return: 该节的所有配置项（键值对，含自动类型转换后的list/dict）
         """
         if section not in self.config.sections():
             raise KeyError(f"配置节 [{section}] 不存在！")
-        # 转换为字典并自动处理类型
+        # 转换为字典并自动处理类型（继承get方法的list/dict解析能力）
         section_dict = {}
         for key, value in self.config[section].items():
             section_dict[key] = self.get(section, key)
         return section_dict
-
 
 # ------------------- 测试使用示例 -------------------
 if __name__ == "__main__":
