@@ -50,19 +50,19 @@ if __name__ == "__main__":
         }
         #构建payload
         action = input("选择action:1.send_group_msg 2.send_private_msg 3.send_poke 4.输入完整的字符串payload/其他类型")
-        if action == "send_group_msg" or action == 1:
+        if action == 1:
             initial_payload["action"] = "send_group_msg"
             initial_payload["group_id"] = None
             initial_payload["message"] = []
-        elif action == "send_private_msg" or action == 2:
+        elif action == 2:
             initial_payload["action"] = "send_private_msg"
             initial_payload["user_id"] = None
             initial_payload["message"] = []
-        elif action == "send_poke" or action == 3:
+        elif action == 3:
             initial_payload["action"] = "send_poke"
             initial_payload["user_id"] = None
             initial_payload["group_id"] = None
-        elif action == "send_poke" or action == 4:
+        elif action == 4:
             init_payload = input("请输入完整的payload")
             payload = json.loads(init_payload)
             print(f"原输入payload为：{str(payload)}")
