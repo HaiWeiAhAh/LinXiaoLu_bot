@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import aiohttp
-from utils.config import ConfigManager
+from config import ConfigManager
 
 cfg = ConfigManager("test_config.ini")
 http_server_ip = cfg.get("http","server_ip")
