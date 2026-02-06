@@ -20,7 +20,7 @@ async def http_send(payload: dict) -> dict:
             return {"status": "error", "message": "missing action"}
 
         # 拼接完整URL（napcat的HTTP接口通常是 /api/{action}，根据实际调整）
-        url = f"http://{http_server_ip}:{http_server_port}/api/{action}"
+        url = f"http://{http_server_ip}:{http_server_port}/{action}"
 
         # 异步发送POST请求
         async with aiohttp.ClientSession(timeout=timeout) as session:
