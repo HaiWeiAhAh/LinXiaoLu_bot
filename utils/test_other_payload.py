@@ -95,7 +95,7 @@ if __name__ == "__main__":
                 continue
             elif next_inout == "2":
                 break
-
-        response = http_send(payload=payload)
+        initial_payload["message"] = message
+        response = http_send(payload=initial_payload)
 
         print(f"消息响应:{response}")
