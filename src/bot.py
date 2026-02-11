@@ -173,7 +173,7 @@ class Action:
         "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
         "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
         "AT | @群里的某人 | 一般作为辅助发言的动作/回复特定某人 | 参数：被at者的qq号",
-        "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的偏移量（整数）"
+        "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的偏移量（正整数）"
     ]
     tools_name = ["SILENT","REPLY","AT","REPLYMSG"]
     other_tools = [   "SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：关键字 or JM号(不要有多余的输出如‘关键字’‘参数’等等)",
@@ -415,7 +415,9 @@ class Action:
                         #获取消息id
                         new_msg_id = response["data"].get("message_id")
                         # 创建历史动作记忆，对话记忆
-                        await bot_session.message_stream.add_new_message(new_msg_id=new_msg_id,new_message=new_group_msg.raw_msg,self_add=True)
+                        now_time = datetime.datetime.now()
+                        final_msg = f"{now_time} [小鹿]-[管理]: {new_group_msg.raw_msg}"
+                        await bot_session.message_stream.add_new_message(new_msg_id=new_msg_id,new_message=final_msg,self_add=True)
                         await self.add_until_action_memory(decision['decision_logic'])
                     else:
                         raise MessageStreamParamError(response["status"])
