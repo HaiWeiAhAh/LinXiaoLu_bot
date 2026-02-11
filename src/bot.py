@@ -126,6 +126,17 @@ class ChatBotSession:
                 action_memory.append((None,await action.get_until_action_memory()))
             return action_memory
 
+    def get_item_by_distance_from_latest(self,distance) -> str|None:
+        """获取距离最新值指定距离的键值对"""
+        item_list = list(self.message_stream.stream_msg.items())  # 转换为(键, 值)的列表
+        target_index = -1 - distance
+
+        if abs(target_index) > len(item_list):
+            return None
+
+        key ,val = item_list[target_index]
+        return key
+
     async def run_session(self):
         self.is_running = True
         self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
