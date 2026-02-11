@@ -415,7 +415,7 @@ class Action:
                         #获取消息id
                         new_msg_id = response["data"].get("message_id")
                         # 创建历史动作记忆，对话记忆
-                        await bot_session.message_stream.add_new_message(new_msg_id=new_msg_id,new_message=new_group_msg.raw_msg)
+                        await bot_session.message_stream.add_new_message(new_msg_id=new_msg_id,new_message=new_group_msg.raw_msg,self_add=True)
                         await self.add_until_action_memory(decision['decision_logic'])
                     else:
                         raise MessageStreamParamError(response["status"])
