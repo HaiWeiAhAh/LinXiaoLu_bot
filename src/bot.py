@@ -102,7 +102,7 @@ class ChatBotSession:
             start_time = time.time()
             # 超时控制（总超时时间，比如5秒）
             while time.time() - start_time < 5:
-                async with self.bot.response_lock:  # 加锁读取
+                async with self.bot.response_Lock:  # 加锁读取
                     resp = self.bot.send_response_queue.get(echo)
                     if resp:
                         del self.bot.send_response_queue[echo]  # 匹配后立即删除，避免重复
@@ -173,8 +173,8 @@ class Action:
     tools = [
         "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
         "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
-        "AT | @群里的某人 | 一般作为辅助发言的动作/回复特定某人 | 参数：被at者的qq号"
-        "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的"
+        "AT | @群里的某人 | 一般作为辅助发言的动作/回复特定某人 | 参数：被at者的qq号",
+        "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的偏移量（整数）"
     ]
     tools_name = ["SILENT","REPLY","AT","REPLYMSG"]
     other_tools = [   "SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：关键字 or JM号(不要有多余的输出如‘关键字’‘参数’等等)",
@@ -379,8 +379,7 @@ class Action:
 
                 # 3. 执行有效动作：调用对应动作方法，传递参数和群ID
                 self.log.info(f"执行{action_type}：{act} | 依据：{act_reason}... | 参数：{act_params[:50]}...")
-                try:
-                    if "REPLY" in act:
+                if "REPLY" in act:
                         # 文字回复：调用reply_action，传递执行参数和群ID
                         await self.reply_action(
                             bot_session=bot_session,
@@ -388,42 +387,45 @@ class Action:
                             inner_os=act_reason,
                             group_msg=new_group_msg,
                         )
-                    elif "AT" in act:
+                elif "AT" in act:
                         await new_group_msg.build_at_msg(at_qq=act_params)
-                    elif "REPLYMSG" in act:
+                elif "REPLYMSG" in act:
                         #寻找当前消息向量的id
                         msg_id= bot_session.get_item_by_distance_from_latest(distance=act_params)
                         await new_group_msg.build_reply_msg(reply_msg_id=msg_id)
-                    elif "SEARCHCOMIC" in act:
+                elif "SEARCHCOMIC" in act:
                         await self.search_comic_action(comic_keyword=act_params,bot_session=bot_session)
-                    elif"DOWNLOADCOMIC" in act:
+                elif"DOWNLOADCOMIC" in act:
                         await self.download_comic_action(bot_session=bot_session,comic_id=act_params)
-                    else:
+                else:
                         self.log.warning(f"不支持的动作类型：{act}，跳过执行")
-                    #构造payload
-                    payload = choice_send_tpye(
-                        payload=await new_group_msg.return_complete_websocket_payload(),
-                        send_type="websocket",
-                    )
-                    #发送payload
-                    await bot_session.send_queue.put(payload)
-                    #获取响应
-                    response = await bot_session.get_response(echo=new_group_msg.echo)
-                    if response:
-                        if response["status"] == "ok":
-                            #4.创建历史动作记忆
-                            await self.add_until_action_memory(decision['decision_logic'])
-                        else:
-                            raise MessageStreamParamError(response["status"])
+                continue  # 单个动作失败，不影响其他动作执行
+            try:
+                # 构造payload
+                payload = choice_send_tpye(
+                    payload=await new_group_msg.return_complete_websocket_payload(),
+                    send_type="websocket",
+                )
+                # 发送payload
+                await bot_session.send_queue.put(payload)
+                # 获取响应
+                response = await bot_session.get_response(echo=new_group_msg.echo)
+                if response:
+                    if response["status"] == "ok":
+                        # 4.创建历史动作记忆
+                        await self.add_until_action_memory(decision['decision_logic'])
                     else:
-                        raise MessageStreamParamError("空的response")
-                except MessageStreamParamError as e:
-                    self.log.error(f"消息发送失败: {e}，不计入bot的记忆", exc_info=True)
-                except TimeoutError as e:
-                    self.log.warning(f"消息id:{str(new_group_msg.echo)}的响应超时，不计入bot的记忆")
-                except Exception as e:
-                    self.log.error(f"{action_type}{act}执行失败：{str(e)}", exc_info=True)
-                    continue  # 单个动作失败，不影响其他动作执行
+                        raise MessageStreamParamError(response["status"])
+                else:
+                    raise MessageStreamParamError("空的response")
+
+            except MessageStreamParamError as e:
+                self.log.error(f"消息发送失败: {e}，不计入bot的记忆", exc_info=True)
+            except TimeoutError as e:
+                self.log.warning(f"消息id:{str(new_group_msg.echo)}的响应超时，不计入bot的记忆")
+            except Exception as e:
+                self.log.error(f"{action_type}{act}执行失败：{str(e)}", exc_info=True)
+
 
             self.log.info(f"会话{bot_session.bot_id}的动作决策执行完成")
         except Exception as e:
