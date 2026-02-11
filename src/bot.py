@@ -7,6 +7,7 @@ import random
 
 from src.JM import search_comic, download_comics
 from src.LLM_API import UseAPI,build_llm_vision_content
+from src.exceptions import MessageStreamParamError
 from src.napcat_msg import Group_Msg, choice_send_tpye
 
 
@@ -169,25 +170,24 @@ class ChatBotSession:
                 pass
         self.log.info(f"Session {self.bot_id} 已停止（群ID：{self.message_stream.stream_group_id}）")
 class Action:
-    def __init__(self,cfg,log):
-        self.cfg = cfg
-        self.log = log
-        self.create_time = datetime.datetime.now()
-        self.action_memory = ""
-        self.tools = [
-"SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
-"REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
-"SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：关键字 or JM号(不要有多余的输出如‘关键字’‘参数’等等)",
-"DOWNLOADCOMIC | 下载JM漫画 | 下载特定ID的JM漫画并发送给用户 | 参数：JM号（一般为6位数的纯数字）"
-]
-        self.prompt= """过往记忆（你做过的事）
+    tools = [
+        "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
+        "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
+        "AT | @群里的某人 | 一般作为辅助发言的动作/回复特定某人 | 参数：被at者的qq号"
+        "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的"
+    ]
+    tools_name = ["SILENT","REPLY","AT","REPLYMSG"]
+    other_tools = [   "SEARCHCOMIC | 搜索JM漫画 | 以关键字搜索JM中漫画并返回结果 | 参数：关键字 or JM号(不要有多余的输出如‘关键字’‘参数’等等)",
+        "DOWNLOADCOMIC | 下载JM漫画 | 下载特定ID的JM漫画并发送给用户(预计5分钟之内发送完成)，并在十分钟后自动撤回 | 参数：JM号（一般为6位数的纯数字）"
+                ]
+    prompt = """过往记忆（你做过的事）
 最近记忆：{{action_memory}}
 记忆联动要求：
 优先完成未完成的承诺或待办事项。
 与用户互动时，风格需与过往保持一致。
 若无相关记忆，则仅基于当前上下文决策。
 当前群聊上下文（正在发生的事）
-最新记录：{{chat_context}}
+{{chat_context}}
 上下文要求：决策需贴合当前话题、氛围与对话对象，优先回应直接@、提问或提及你的用户，避免打断他人核心对话。
 可用动作工具以及使用规则：
 工具列表：{{tools}}
@@ -196,6 +196,12 @@ class Action:
 【主动作】（工具标识）【决策依据】（选此动作的原因）【执行参数】（具体参数，无则填“无”）
 【辅助动作】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无）
 【辅助动作】（工具标识/无）【决策依据】（原因/无）【执行参数】（参数/无)"""
+    def __init__(self,cfg,log):
+        self.cfg = cfg
+        self.log = log
+        self.action_id = uuid.uuid4()
+        self.create_time = datetime.datetime.now()
+        self.action_memory = ""
     async def add_until_action_memory(self,decision:str):
         now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         action_memory = f"[{now_str_time}]:{decision}]"
@@ -314,15 +320,14 @@ class Action:
             action_memory = await bot_session.get_action_memory()
             # 1.2 构建并格式化当前群聊上下文（取最新N条，配置可配，默认15条）
             # 1.3 格式化工具列表（直接拼接self.tools）
-            tools = "\n".join(self.tools)
+            tools = "\n".join(Action.tools)
 
             # 2. 填充Prompt占位符（替换{{}}为实际内容）
-            full_prompt = self.prompt.replace("{{action_memory}}", action_memory) \
+            full_prompt = Action.prompt.replace("{{action_memory}}", action_memory) \
                 .replace("{{chat_context}}", chat_context) \
                 .replace("{{tools}}", tools)
-            self.log.debug(f"决策Prompt构建完成（前500字符）：{full_prompt[:500]}...")
+            self.log.debug(f"决策Prompt构建完成：{full_prompt}")
 
-            # 3. 调用项目现有LLM API（复用UseAPI，和ChatBotSession的调用逻辑完全一致）
             llm_response = await UseAPI(
                 current_uesrmsg=full_prompt,
                 model=self.cfg.get("openai", "model"),
@@ -356,6 +361,11 @@ class Action:
             ]
             #group_id = bot_session.message_stream.stream_group_id  # 获取执行的群ID
 
+            # 创建群聊消息对象
+            new_group_msg = Group_Msg(
+                group_id=bot_session.message_stream.stream_group_id
+            )
+
             # 2. 按顺序执行每个动作
             for action_type, action_info in actions:
                 act = action_info["action"]
@@ -368,19 +378,49 @@ class Action:
                     continue
 
                 # 3. 执行有效动作：调用对应动作方法，传递参数和群ID
-                self.log.info(f"执行{action_type}：{act} | 依据：{act_reason[:30]}... | 参数：{act_params[:50]}...")
+                self.log.info(f"执行{action_type}：{act} | 依据：{act_reason}... | 参数：{act_params[:50]}...")
                 try:
                     if "REPLY" in act:
                         # 文字回复：调用reply_action，传递执行参数和群ID
-                        await self.reply_action(bot_session=bot_session,chat_context=chat_context,inner_os=act_reason)
+                        await self.reply_action(
+                            bot_session=bot_session,
+                            chat_context=chat_context,
+                            inner_os=act_reason,
+                            group_msg=new_group_msg,
+                        )
+                    elif "AT" in act:
+                        await new_group_msg.build_at_msg(at_qq=act_params)
+                    elif "REPLYMSG" in act:
+                        #寻找当前消息向量的id
+                        msg_id= bot_session.get_item_by_distance_from_latest(distance=act_params)
+                        await new_group_msg.build_reply_msg(reply_msg_id=msg_id)
                     elif "SEARCHCOMIC" in act:
                         await self.search_comic_action(comic_keyword=act_params,bot_session=bot_session)
                     elif"DOWNLOADCOMIC" in act:
                         await self.download_comic_action(bot_session=bot_session,comic_id=act_params)
                     else:
                         self.log.warning(f"不支持的动作类型：{act}，跳过执行")
-                    #4.创建历史动作记忆
-                    await self.add_until_action_memory(decision['decision_logic'])
+                    #构造payload
+                    payload = choice_send_tpye(
+                        payload=await new_group_msg.return_complete_websocket_payload(),
+                        send_type="websocket",
+                    )
+                    #发送payload
+                    await bot_session.send_queue.put(payload)
+                    #获取响应
+                    response = await bot_session.get_response(echo=new_group_msg.echo)
+                    if response:
+                        if response["status"] == "ok":
+                            #4.创建历史动作记忆
+                            await self.add_until_action_memory(decision['decision_logic'])
+                        else:
+                            raise MessageStreamParamError(response["status"])
+                    else:
+                        raise MessageStreamParamError("空的response")
+                except MessageStreamParamError as e:
+                    self.log.error(f"消息发送失败: {e}，不计入bot的记忆", exc_info=True)
+                except TimeoutError as e:
+                    self.log.warning(f"消息id:{str(new_group_msg.echo)}的响应超时，不计入bot的记忆")
                 except Exception as e:
                     self.log.error(f"{action_type}{act}执行失败：{str(e)}", exc_info=True)
                     continue  # 单个动作失败，不影响其他动作执行
@@ -389,7 +429,7 @@ class Action:
         except Exception as e:
             self.log.error(f"执行动作决策总流程失败：{str(e)}", exc_info=True)
 
-    async def reply_action(self,bot_session:ChatBotSession,chat_context,inner_os:str):
+    async def reply_action(self,bot_session:ChatBotSession,chat_context,inner_os:str,group_msg:Group_Msg):
         """
 
         :return: 返回动作的完成状态
@@ -397,9 +437,9 @@ class Action:
         template_msg = f"""你注意到了这个群聊，该群聊的聊天记录如下：
 {chat_context}
 你现在正在想：{inner_os}
-基于聊天记录的语境和角色身份以及过往内心心理记忆，生成一句符合人设的**群聊回复**；
+基于聊天记录的语境和角色身份以及心理，生成一句符合人设的**群聊回复**；
 **[最终发言检查]**:
-回复的内容是否符合人设?
+回复的内容是否符合实际现实，或者人设?
 必须口语化，适应QQ群聊天。不要长篇大论。
 回复不要浮夸，不要用夸张修辞，平淡一些符合日常群聊的说话习惯，不要输出多余的内容比如：(动作描述)。
 仅输出要回复的内容"""
@@ -411,20 +451,8 @@ class Action:
                                     global_cfg=self.cfg,
                                     llm_role=self.cfg.get("setup", "setting"))
 
-            #创建消息，
-            new_group_msg = Group_Msg(group_id=bot_session.message_stream.stream_group_id,)
-            await new_group_msg.build_text_msg(text=response)
-            payload:dict = dict(await new_group_msg.return_complete_http_payload())
-            # 选择发送方式
-            send_msg = choice_send_tpye(payload=payload, send_type="http")
-            #放入消息发送队列
-            await bot_session.send_queue.put(send_msg)
-            # 获取自己的消息
-            now_str_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            alias_name = self.cfg.get("setup", "alias_name")
-            str_msg = f"{now_str_time} [{alias_name}]: {response}"  # 将ai的回复添加进聊天流
-            await bot_session.message_stream.add_new_message(str_msg, self_add=True)
-            self.log.info(f"Session {bot_session.bot_id} 消息：{response}...")
+            #存入消息
+            await group_msg.build_text_msg(text=response)
         except Exception as e:
             self.log.error(f"Session {bot_session.bot_id} 处理消息失败：{e}", exc_info=True)
             self.log.error(f"{e}")
@@ -560,7 +588,7 @@ class Bot:
                         role = role_map[role]
                         break
                 now_str_time = datetime.datetime.fromtimestamp(send_time).strftime("%Y-%m-%d %H:%M:%S")
-                str_msg = f"{now_str_time} [{nickname}]-[{role}]: {text_message}"
+                str_msg = f"{now_str_time} [{nickname}]-[{role}]-[{sender_id}]: {text_message}"
 
                 # 查找/创建消息流
                 target_stream = None
