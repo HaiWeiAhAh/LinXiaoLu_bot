@@ -103,9 +103,9 @@ class ChatBotSession:
             # 超时控制（总超时时间，比如5秒）
             while time.time() - start_time < 5:
                 async with self.bot.response_Lock:  # 加锁读取
-                    resp = self.bot.send_response_queue.get(echo)
+                    resp = self.bot.bot_response_queue.get(echo)
                     if resp:
-                        del self.bot.send_response_queue[echo]  # 匹配后立即删除，避免重复
+                        del self.bot.bot_response_queue[echo]  # 匹配后立即删除，避免重复
                         return resp
                 await asyncio.sleep(0.1)  # 短轮询，降低CPU消耗
             raise TimeoutError(f"echo={echo} 响应超时")
