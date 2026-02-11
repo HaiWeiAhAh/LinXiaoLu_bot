@@ -32,26 +32,58 @@ class MessageStreamObject:
         self.crate_time = time.time()
         self.stream_id = uuid.uuid4()
         self.stream_name: str = ""
-        self.stream_msg: list = []  # 这里放置受到的群聊消息
+        self.stream_msg: dict = {}  # 这里放置受到的群聊消息
         self.stream_type = stream_type
         self.stream_group_id = group_id
         self.have_new_message = False
-
-    async def add_new_message(self,new_message:str,self_add:bool=False):
-        self.stream_msg.append(new_message)
+    async def update_stream_message(self):
+        pass
+    async def add_new_message(self,new_message:str,new_msg_id: int,self_add:bool=False):
+        #去掉用户消息的换行符，防止破环prompt格式
+        init_msg = new_message.replace("\n", "").replace("\r", "")
+        self.stream_msg[new_msg_id] = init_msg
         if not self_add:
             self.have_new_message = True
-    async def get_new_message(self,max_msg_count:int = 20) -> str:
+    async def get_new_message(self,max_msg_count:int = 15) -> str:
         if not isinstance(max_msg_count, int) or max_msg_count <= 0:
             max_msg_count = 15
         if not self.have_new_message:
             return ""
         if not self.stream_msg:
             return "暂无历史群聊消息"
-        recent_msg = self.stream_msg[-max_msg_count:]
+        # 字典转有序列表（按插入顺序，即消息时间顺序），取最后max_msg_count条
+        # 先获取所有消息值的列表，再切片取最新的N条
+        msg_values = list(self.stream_msg.values())
+        recent_msg = msg_values[-max_msg_count:]
         messages_ = "\n".join(recent_msg)
         self.have_new_message = False
         return messages_
+
+    async def clean_excess_messages(self, keep_count: int = 15) -> int:
+        """
+        清理多余的消息，只保留最新的指定数量的消息
+        :param keep_count: 要保留的最新消息数量
+        :return: 被清理的消息数量
+        """
+        # 参数校验：确保保留数量为正整数
+        if not isinstance(keep_count, int) or keep_count <= 0:
+            keep_count = 20
+
+        total_msg = len(self.stream_msg)
+        # 如果当前消息数≤保留数，无需清理
+        if total_msg <= keep_count:
+            return 0
+
+        # 计算需要删除的旧消息数量
+        delete_count = total_msg - keep_count
+        # 获取字典的有序键列表
+        old_msg_ids = list(self.stream_msg.keys())[:delete_count]
+        # 遍历删除旧消息
+        for msg_id in old_msg_ids:
+            del self.stream_msg[msg_id]
+
+        # 返回清理的数量，方便日志/监控
+        return delete_count
 class ChatBotSession:
     def __init__(self,cfg,log,bot,message_stream:MessageStreamObject,send_message_queue: asyncio.Queue):
         self.log = log
