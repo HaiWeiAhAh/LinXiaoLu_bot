@@ -562,7 +562,7 @@ class Bot:
                         data = message_dict.get("data", {})
 
                         if data.get("sub_type") == 0: #图片消息
-                            text_requirement = """请你准确的以自然语言的形式，用一段话，描述这张图片的主体和画面，将图片的特征描述出来，严禁多余的输出如：提示文明使用表情包的输入等等"""
+                            text_requirement = """请你准确的以自然语言的形式，用一段话，描述这张图片的主体和画面，将图片的特征描述出来，严禁多余的输出如：提示文明使用图片的输入等等"""
                             image_url = data.get("url")
                             content = build_llm_vision_content(image_urls=image_url,text=text_requirement)
                             response = await UseAPI(current_uesrmsg=content,model=self.cfg.get("openai","model_vision"),global_cfg=self.cfg)
@@ -582,6 +582,9 @@ class Bot:
                 send_time = msg.get("time", datetime.datetime.now().timestamp())
                 nickname = msg.get("sender", {}).get("nickname", "unknown")
                 role = msg.get("sender", {}).get("role", "member")
+                sender_id = msg.get("sender", {}).get("user_id", "unknown")
+                #消息id
+                msg_id = msg.get("message_id")
                 # 修正发送者身份
                 for role_map in MessageStreamObject.GROUP_ROLE:
                     if role in role_map:
@@ -672,10 +675,22 @@ class Bot:
         session_task = asyncio.create_task(session.run_session())
         self.bot_session[message_stream] = (session,session_task)
         self.log.info(f"ChatbotSession-{session.bot_id}对象已创建并激活")
+    async def clean_expired_echo(self):
+        while self.is_running:
+            async with self.response_Lock:
+                current_time = time.time()
+                #筛选合法消息
+                self.bot_response_queue ={
+                    echo : resp for echo, resp in self.bot_response_queue.items()
+                    if current_time - resp["recv_time"] < self.expired_time
+                }
+            await asyncio.sleep(10) #十秒清理一次
     async def run(self):
         """启动Bot消息消费循环"""
         self.log.info("Bot开始消费消息...")
         try:
+            #启动后台清理过期消息任务
+            self.clean_task = asyncio.create_task(self.clean_expired_echo())
             while self.is_running:
                 # 阻塞等待队列消息，超时避免死等（可调整）
                 try:
