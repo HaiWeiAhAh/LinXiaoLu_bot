@@ -6,9 +6,11 @@ class Group_Msg:
         self.group_id = group_id
         self.echo = echo or str(uuid.uuid4())
         self.msg = []
+        self.raw_msg = ""
     async def build_text_msg(self,text:str):
         text_msg = {"type": "text", "data": {"text": text}}
         self.msg.append(text_msg)
+        self.raw_msg += text
     async def build_image_msg(self,image:str):
         image_msg = {
             "type": "image",
@@ -30,8 +32,9 @@ class Group_Msg:
                 "qq": f"{at_qq}", #all为艾特全体
             }
         }
+        self.raw_msg += f"@{at_qq}"
         self.msg.append(at_msg)
-    async def build_reply_msg(self,reply_msg_id:int|str):
+    async def build_reply_msg(self,reply_msg_id:int|str,reply:str):
         reply_msg = {
             #第一个必须为reply
             "type": "reply",
@@ -39,6 +42,7 @@ class Group_Msg:
                 "id": reply_msg_id
             }
         }
+        self.raw_msg = f"回复消息({reply[:5]}...)说:" + self.raw_msg
         self.msg.insert(0,reply_msg)
     async def build_file_msg(self,file_name:str,file):
         file_msg = {

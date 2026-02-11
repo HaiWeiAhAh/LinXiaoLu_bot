@@ -127,7 +127,7 @@ class ChatBotSession:
                 action_memory.append((None,await action.get_until_action_memory()))
             return action_memory
 
-    def get_item_by_distance_from_latest(self,distance) -> str|None:
+    def get_item_by_distance_from_latest(self,distance) -> tuple|None:
         """获取距离最新值指定距离的键值对"""
         item_list = list(self.message_stream.stream_msg.items())  # 转换为(键, 值)的列表
         target_index = -1 - distance
@@ -135,8 +135,7 @@ class ChatBotSession:
         if abs(target_index) > len(item_list):
             return None
 
-        key ,val = item_list[target_index]
-        return key
+        return item_list[target_index]
 
     async def run_session(self):
         self.is_running = True
@@ -391,8 +390,8 @@ class Action:
                         await new_group_msg.build_at_msg(at_qq=act_params)
                 elif "REPLYMSG" in act:
                         #寻找当前消息向量的id
-                        msg_id= bot_session.get_item_by_distance_from_latest(distance=act_params)
-                        await new_group_msg.build_reply_msg(reply_msg_id=msg_id)
+                        msg_id,reply= bot_session.get_item_by_distance_from_latest(distance=act_params)
+                        await new_group_msg.build_reply_msg(reply_msg_id=msg_id,reply=reply)
                 elif "SEARCHCOMIC" in act:
                         await self.search_comic_action(comic_keyword=act_params,bot_session=bot_session)
                 elif"DOWNLOADCOMIC" in act:
@@ -412,7 +411,11 @@ class Action:
                 response = await bot_session.get_response(echo=new_group_msg.echo)
                 if response:
                     if response["status"] == "ok":
-                        # 4.创建历史动作记忆
+                        self.log.debug("收到正确响应,bot正在记忆数据")
+                        #获取消息id
+                        new_msg_id = response["data"].get("message_id")
+                        # 创建历史动作记忆，对话记忆
+                        await bot_session.message_stream.add_new_message(new_msg_id=new_msg_id,new_message=new_group_msg.raw_msg)
                         await self.add_until_action_memory(decision['decision_logic'])
                     else:
                         raise MessageStreamParamError(response["status"])
