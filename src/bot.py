@@ -53,21 +53,36 @@ class MessageStreamObject:
         self.have_new_message = False
         return messages_
 class ChatBotSession:
-    def __init__(self,cfg,log,message_stream:MessageStreamObject,send_message_queue: asyncio.Queue):
+    def __init__(self,cfg,log,bot,message_stream:MessageStreamObject,send_message_queue: asyncio.Queue):
         self.log = log
         self.cfg = cfg
-        self.bot_id = uuid.uuid4()
+        self.bot = bot
+        self.bot_id = str(uuid.uuid4())
         self.send_queue = send_message_queue
         self.message_stream = message_stream
         self.bot_action =[] #存储bot的行为记忆对象
         self.max_memory = self.cfg.get("setup","max_bot_memory")
         self.session_task = None
         self.is_running = False
+    async def get_response(self,echo:str)-> None|dict:
+        try:
+            start_time = time.time()
+            # 超时控制（总超时时间，比如5秒）
+            while time.time() - start_time < 5:
+                async with self.bot.response_lock:  # 加锁读取
+                    resp = self.bot.send_response_queue.get(echo)
+                    if resp:
+                        del self.bot.send_response_queue[echo]  # 匹配后立即删除，避免重复
+                        return resp
+                await asyncio.sleep(0.1)  # 短轮询，降低CPU消耗
+            raise TimeoutError(f"echo={echo} 响应超时")
+        except Exception as e:
+            self.log.warning(f"获取响应失败：{e}")
+            return None
     async def get_action_memory(self,max_memory:int = 15,llm_list:bool = False)->str|list:
         if not self.bot_action:
             return "暂无历史动作记忆"
         action_memory = []
-        i = 0
         if not llm_list:
             for action in self.bot_action:
                 memory:str = await action.get_until_action_memory()
@@ -407,12 +422,17 @@ class Action:
         else:
             self.log.warning("文件不存在")
 class Bot:
-    def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue):
+    def __init__(self, log,cfg, message_queue: asyncio.Queue, send_message_queue: asyncio.Queue,send_response_queue: asyncio.Queue):
         self.log = log
         self.cfg = cfg
         self.message_queue = message_queue  # 注入全局队列
         self.send_message_queue = send_message_queue
+        self.send_response_queue = send_response_queue
         self.is_running = True  # 控制消费循环
+        self.clean_task = None #后台清理任务
+        self.response_Lock = asyncio.Lock()  #锁
+        self.expired_time = self.cfg.get("bot", "expired_time")
+        self.bot_response_queue = {}
         self.bot_session: dict[MessageStreamObject, tuple[ChatBotSession,asyncio.Task]] = {} #存储chatbot对象
         self.msg_stream:list[MessageStreamObject] = [] #存储消息流
 
@@ -519,7 +539,7 @@ class Bot:
                     self.log.info(f"为群{group_id}创建新消息流")
 
                 # 追加消息并标记有新消息
-                await target_stream.add_new_message(str_msg)  # 改用async方法（原代码是直接append，需保持async）
+                await target_stream.add_new_message(new_message=str_msg,new_msg_id=msg_id)
                 self.log.debug(f"群{group_id}消息已存入流：{str_msg}")
 
                 # 为新消息流创建并启动Session（核心：激活Session）
@@ -528,6 +548,15 @@ class Bot:
                 self.log.debug(f"暂不支持的消息类型：{message_type}，仅支持群聊消息")
         except Exception as e:
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
+    async def response_handle(self, response: dict):
+        try:
+            #获取响应id
+            response_echo = response.get("request_echo")
+            #按照id存储响应
+            response["recv_time"] = time.time()
+            self.bot_response_queue[response_echo] = response
+        except Exception as e:
+            self.log.error("添加响应消息错误")
     async def command_debug(self, msg:str, stream_obj:MessageStreamObject) -> bool:
         self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
         if msg == "/view_stream_msg":
@@ -561,7 +590,14 @@ class Bot:
         self.log.debug("未找到指令")
         return False
     async def create_and_start_bot_session(self,message_stream:MessageStreamObject):
-        session = ChatBotSession(cfg=self.cfg,log=self.log,message_stream=message_stream,send_message_queue=self.send_message_queue)
+        session = ChatBotSession(
+            cfg=self.cfg,
+            log=self.log,
+            message_stream=message_stream,
+            send_message_queue=self.send_message_queue,
+            bot=self,
+
+        )
         session_task = asyncio.create_task(session.run_session())
         self.bot_session[message_stream] = (session,session_task)
         self.log.info(f"ChatbotSession-{session.bot_id}对象已创建并激活")
@@ -576,6 +612,9 @@ class Bot:
                     await self.message_handle(msg)
                     # 标记消息处理完成（队列任务追踪）
                     self.message_queue.task_done()
+                    response = await asyncio.wait_for(self.send_response_queue.get(), timeout=1.0)
+                    await self.response_handle(response)
+                    self.send_response_queue.task_done()
                 except asyncio.TimeoutError:
                     continue  # 超时继续循环，检测是否需要退出
         except asyncio.CancelledError:

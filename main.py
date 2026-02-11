@@ -8,12 +8,13 @@ from src.napcat_adapter import Adapter
 
 global_message_queue = asyncio.Queue()
 global_send_message_queue = asyncio.Queue()
+global_response_queue = asyncio.Queue()
 
 async def start_adapter(cfg,log):
     """模拟Adapter：无限循环运行，捕获取消信号优雅退出"""
     log = log.get_logger("adapter")
     log.info("Adapter 启动成功，开始监听消息...")
-    adapter = Adapter(cfg=cfg, log=log,global_message_queue=global_message_queue,global_send_queue=global_send_message_queue)
+    adapter = Adapter(cfg=cfg, log=log,global_message_queue=global_message_queue,global_send_queue=global_send_message_queue,global_response_queue=global_response_queue)
     #模拟你的Adapter核心逻辑（比如WebSocket监听）
     server_task = asyncio.create_task(adapter.start_server())
     send_msg_task = asyncio.create_task(adapter.get_send_msg_to_napcat())
@@ -30,7 +31,13 @@ async def start_bot(cfg, log):
     """模拟Bot：无限循环运行，捕获取消信号优雅退出"""
     log = log.get_logger("bot")
     log.info("Bot 启动成功，开始处理消息...")
-    bot = Bot(log=log,cfg = cfg, message_queue=global_message_queue,send_message_queue =global_send_message_queue )
+    bot = Bot(
+        log=log,
+        cfg = cfg,
+        message_queue=global_message_queue,
+        send_message_queue =global_send_message_queue,
+        send_response_queue =global_response_queue
+    )
     try:
         await bot.run()
     except asyncio.CancelledError:
