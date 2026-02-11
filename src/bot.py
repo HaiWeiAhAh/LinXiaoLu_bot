@@ -504,6 +504,7 @@ class Bot:
         self.is_running = True  # 控制消费循环
         self.clean_task = None #后台清理任务
         self.response_Lock = asyncio.Lock()  #锁
+        self.queue_timeout = 1
         self.expired_time = self.cfg.get("bot", "expired_time")
         self.bot_response_queue = {}
         self.bot_session: dict[MessageStreamObject, tuple[ChatBotSession,asyncio.Task]] = {} #存储chatbot对象
@@ -633,6 +634,7 @@ class Bot:
             response["recv_time"] = time.time()
             async with self.response_Lock:  # 加锁写入
                 self.bot_response_queue[response_echo] = response
+                self.log.debug(f"响应{response_echo}写入成功")
         except Exception as e:
             self.log.error("处理响应失败：%s", str(e), exc_info=True)
     async def command_debug(self, msg:str, stream_obj:MessageStreamObject) -> bool:
@@ -689,26 +691,83 @@ class Bot:
                     if current_time - resp["recv_time"] < self.expired_time
                 }
             await asyncio.sleep(10) #十秒清理一次
+
+    async def _consume_message_queue(self):
+        """独立消费消息队列（解耦响应队列）"""
+        while self.is_running:
+            try:
+                msg = await asyncio.wait_for(self.message_queue.get(), timeout=self.queue_timeout)
+                await self.message_handle(msg)
+                self.message_queue.task_done()
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                self.log.error(f"消费消息队列失败：{str(e)}", exc_info=True)
+
+    async def _consume_response_queue(self):
+        """独立消费响应队列（解耦消息队列）"""
+        while self.is_running:
+            try:
+                response = await asyncio.wait_for(self.send_response_queue.get(), timeout=self.queue_timeout)
+                await self.response_handle(response)
+                self.send_response_queue.task_done()
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                self.log.error(f"消费响应队列失败：{str(e)}", exc_info=True)
+
     async def run(self):
-        """启动Bot消息消费循环"""
+        """修复后的run方法：解耦队列消费、完善异常处理、资源释放"""
         self.log.info("Bot开始消费消息...")
+        consume_msg_task = None
+        consume_resp_task = None
         try:
-            #启动后台清理过期消息任务
+            # 启动后台清理过期消息任务（带异常捕获）
             self.clean_task = asyncio.create_task(self.clean_expired_echo())
-            while self.is_running:
-                # 阻塞等待队列消息，超时避免死等（可调整）
-                try:
-                    msg = await asyncio.wait_for(self.message_queue.get(), timeout=1.0)
-                    await self.message_handle(msg)
-                    # 标记消息处理完成（队列任务追踪）
-                    self.message_queue.task_done()
-                    response = await asyncio.wait_for(self.send_response_queue.get(), timeout=1.0)
-                    await self.response_handle(response)
-                    self.send_response_queue.task_done()
-                except asyncio.TimeoutError:
-                    continue  # 超时继续循环，检测是否需要退出
+            # 修复：独立启动消息队列和响应队列的消费任务（解耦）
+            consume_msg_task = asyncio.create_task(self._consume_message_queue())
+            consume_resp_task = asyncio.create_task(self._consume_response_queue())
+            # 等待所有消费任务完成（直到被取消）
+            await asyncio.gather(consume_msg_task, consume_resp_task, self.clean_task)
         except asyncio.CancelledError:
             self.log.info("Bot消费任务被取消，正在退出")
             self.is_running = False
+        except Exception as e:
+            self.log.error(f"Bot主循环异常：{str(e)}", exc_info=True)
+            self.is_running = False
         finally:
-            self.log.info("Bot已停止消费消息")
+            # 修复：完整释放资源
+            self.log.info("开始释放Bot资源...")
+            # 1. 取消后台任务
+            if self.clean_task and not self.clean_task.done():
+                self.clean_task.cancel()
+                try:
+                    await self.clean_task
+                except asyncio.CancelledError:
+                    self.log.info("后台清理任务已取消")
+            # 2. 取消消费任务
+            if consume_msg_task and not consume_msg_task.done():
+                consume_msg_task.cancel()
+                try:
+                    await consume_msg_task
+                except asyncio.CancelledError:
+                    self.log.info("消息队列消费任务已取消")
+            if consume_resp_task and not consume_resp_task.done():
+                consume_resp_task.cancel()
+                try:
+                    await consume_resp_task
+                except asyncio.CancelledError:
+                    self.log.info("响应队列消费任务已取消")
+            # 3. 取消所有Session任务
+            for stream, (session, task) in self.bot_session.items():
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        self.log.info(f"Session-{session.bot_id}任务已取消")
+            # 4. 清空队列和会话
+            self.bot_response_queue.clear()
+            self.bot_session.clear()
+            self.msg_stream.clear()
+            self.log.info("Bot已停止消费消息，资源释放完成")
