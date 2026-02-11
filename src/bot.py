@@ -626,13 +626,15 @@ class Bot:
             self.log.error(f"消息处理失败：msg={msg} | 错误详情：{str(e)}", exc_info=True)
     async def response_handle(self, response: dict):
         try:
-            #获取响应id
             response_echo = response.get("request_echo")
-            #按照id存储响应
+            if not response_echo:  # 增加echo空值校验
+                self.log.warning("响应缺少request_echo字段，丢弃：%s", response)
+                return
             response["recv_time"] = time.time()
-            self.bot_response_queue[response_echo] = response
+            async with self.response_Lock:  # 加锁写入
+                self.bot_response_queue[response_echo] = response
         except Exception as e:
-            self.log.error("添加响应消息错误")
+            self.log.error("处理响应失败：%s", str(e), exc_info=True)
     async def command_debug(self, msg:str, stream_obj:MessageStreamObject) -> bool:
         self.log.info(f"目前聊天流共有{len(self.msg_stream)}个，bot有{len(self.bot_session)}")
         if msg == "/view_stream_msg":
