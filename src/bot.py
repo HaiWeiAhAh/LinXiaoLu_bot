@@ -378,7 +378,7 @@ class Action:
 
                 # 3. 执行有效动作：调用对应动作方法，传递参数和群ID
                 self.log.info(f"执行{action_type}：{act} | 依据：{act_reason}... | 参数：{act_params[:50]}...")
-                if "REPLY" in act:
+                if "REPLY" == act:
                         # 文字回复：调用reply_action，传递执行参数和群ID
                         await self.reply_action(
                             bot_session=bot_session,
