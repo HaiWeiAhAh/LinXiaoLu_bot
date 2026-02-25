@@ -12,7 +12,9 @@ class BaseAppError(Exception):
         self.msg = msg          # 可读的错误信息
         self.error_code = error_code  # 错误码（便于前端/日志识别）
         super().__init__(f"[{error_code}] {msg}")  # 父类初始化，保留默认异常信息
-
+class MessagePayloadError(BaseAppError):
+    def __init__(self, msg: str, error_code: int = 1000):
+        super().__init__(msg, error_code)
 class MessageStreamBaseError(BaseAppError):
     """消息流模块通用异常基类（专属业务异常的父类）"""
     def __init__(self, msg: str, error_code: int = 1000):
@@ -40,3 +42,8 @@ class MessageStreamDeleteError(MessageStreamBaseError):
     """消息删除失败（如清理消息时出现未知错误）"""
     def __init__(self, msg: str):
         super().__init__(msg, error_code=1004)
+
+class MessagePayloadNullError(MessagePayloadError):
+    """无有效消息的Group对象"""
+    def __init__(self, msg: str):
+        super().__init__(msg, error_code=1005)
