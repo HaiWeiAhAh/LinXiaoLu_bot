@@ -178,7 +178,7 @@ class ChatBotSession:
 class Action:
     tools = [
         "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
-        "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
+        "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 参数:你当前的真实想法",
         "AT | @群里的某人 | 一般作为辅助发言的动作/回复特定某人 | 参数：被at者的qq号",
         "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的偏移量（正整数）"
     ]
@@ -405,8 +405,10 @@ class Action:
                         await self.download_comic_action(bot_session=bot_session,comic_id=act_params)
                 else:
                         self.log.warning(f"不支持的动作类型：{act}，跳过执行")
-                continue  # 单个动作失败，不影响其他动作执行
+                continue
             try:
+                if new_group_msg.msg:
+                    raise MessagePayloadNullError("消息对象无有效消息,跳过处理")
                 # 构造payload
                 payload = choice_send_tpye(
                     payload=await new_group_msg.return_complete_websocket_payload(),
@@ -461,7 +463,6 @@ class Action:
             # 获取ai的实际回复
             response = await UseAPI(current_uesrmsg=template_msg,
                                     model=self.cfg.get("openai", "model"),
-                                    history=await bot_session.get_action_memory(llm_list=True),
                                     global_cfg=self.cfg,
                                     llm_role=self.cfg.get("setup", "setting"))
 
