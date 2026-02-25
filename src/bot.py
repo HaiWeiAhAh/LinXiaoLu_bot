@@ -145,6 +145,7 @@ class ChatBotSession:
         return item_list[target_index]
 
     async def run_session(self):
+        """刺激-反应模型（当前版本没有通用模型）"""
         self.is_running = True
         self.log.info(f"Session started for {self.bot_id}群id{self.message_stream.stream_id}")
         while self.is_running:
@@ -153,11 +154,16 @@ class ChatBotSession:
                 continue
             else:
                 if random.random() < self.cfg.get("setup","probability_reply"): #概率回复
+                    #刺激
                     msg = await self.message_stream.get_new_message()
                     new_action = Action(cfg=self.cfg,log=self.log)
+
+                    #反应（决策执行）
                     decision =await new_action.generate_decision(bot_session=self,chat_context=msg)
                     decision_dict=await new_action.parsing_decision(decision)
                     await new_action.execute_action(bot_session=self,chat_context=msg,decision=decision_dict)
+
+                    #生成记忆
                     self.bot_action.append(new_action)
                 else:
                     await self.message_stream.get_new_message()
@@ -178,7 +184,7 @@ class ChatBotSession:
 class Action:
     tools = [
         "SILENT | 静默观察 | 无合适动作/无需互动/群聊氛围不适合发言时 | 此动作不需要参数",
-        "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 参数:你当前的真实想法",
+        "REPLY | 文字回复 | 参与话题/回应通用提问/告知动作进度时 | 此动作不需要参数",
         "AT | @群里的某人 | 一般作为辅助发言的动作/回复特定某人 | 参数：被at者的qq号",
         "REPLYMSG | 回复特定的消息 | 专注回答某个特定的消息/指出消息 | 参数：距当前最新消息的偏移量（正整数）"
     ]
@@ -407,7 +413,7 @@ class Action:
                         self.log.warning(f"不支持的动作类型：{act}，跳过执行")
                 continue
             try:
-                if new_group_msg.msg:
+                if not new_group_msg.msg:
                     raise MessagePayloadNullError("消息对象无有效消息,跳过处理")
                 # 构造payload
                 payload = choice_send_tpye(
