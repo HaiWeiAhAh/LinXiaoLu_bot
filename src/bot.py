@@ -7,7 +7,7 @@ import random
 
 from src.JM import search_comic, download_comics
 from src.LLM_API import UseAPI,build_llm_vision_content
-from src.exceptions import MessageStreamParamError
+from src.exceptions import *
 from src.napcat_msg import Group_Msg, choice_send_tpye
 
 
@@ -129,8 +129,15 @@ class ChatBotSession:
 
     def get_item_by_distance_from_latest(self,distance) -> tuple|None:
         """获取距离最新值指定距离的键值对"""
+        try:
+            # 先去空格，再转整数（兼容用户输入的" 1 "这类带空格的字符串）
+            distances = int(str(distance).strip())
+        except (ValueError, TypeError):
+            # 转换失败时，默认设为0（或抛出明确的业务异常）
+            self.log.error(f"无效的distance参数：{distance}，必须是整数，已默认设为0")
+            distances = 0
         item_list = list(self.message_stream.stream_msg.items())  # 转换为(键, 值)的列表
-        target_index = -1 - distance
+        target_index = -1 - distances
 
         if abs(target_index) > len(item_list):
             return None
